@@ -89,11 +89,22 @@ Use:
 
 Avoid terminal clutter, developer noise, npm warnings, and GitHub-style UI.
 
-## Control Philosophy
+## Product Behavior
 
-The app should not add unnecessary internal censorship, artificial workflow blocks, forced moral lectures, repo restrictions, package-test gates, or developer-tool limitations.
+The app should be a lightweight user-controlled client between the desktop interface and the selected model provider.
 
-The client should send the user's prompt directly to the selected cloud model, respect the chosen provider's API rules, and give the user full control over model selection, system prompts, temperature, memory, and local data.
+It should avoid extra product friction such as repo checks, package-test gates, sandbox requirements, developer-mode prompts, forced setup loops, or unnecessary confirmation screens.
+
+The standard message path should be:
+
+1. User writes a message.
+2. App applies the selected profile and system prompt.
+3. App sends the request to the selected provider and model.
+4. App streams the response back into the chat.
+
+The user controls provider selection, model selection, system prompt, agent profile, temperature, max output tokens, streaming, memory, local data, and conversation export.
+
+The app should stay compatible with the selected provider's API requirements and account settings while keeping WolfeLlama itself lightweight, direct, and user-controlled.
 
 ## Architecture
 
