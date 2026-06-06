@@ -1,0 +1,25 @@
+{
+  "name": "wolfellama-cloud-client",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Private local-first desktop AI chat client for cloud models.",
+  "main": "dist-electron/main.js",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "lint": "echo \"lint not configured yet\"",
+    "start": "electron ."
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "latest",
+    "vite": "latest",
+    "typescript": "latest",
+    "react": "latest",
+    "react-dom": "latest",
+    "zustand": "latest",
+    "electron": "latest"
+  },
+  "devDependencies": {}
+}
