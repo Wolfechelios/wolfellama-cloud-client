@@ -18,7 +18,7 @@ const starterMessages: ChatMessage[] = [
     id: 'welcome',
     role: 'assistant',
     content:
-      'WolfeLlama Cloud Client is ready. Ollama Local is built in as the default local provider. Cloud providers can be connected when needed.',
+      'WolfeLlama Cloud Client is ready. Ollama Local is built in as the default local provider. Cloud providers are present in the selector and can be wired with API keys next.',
   },
 ];
 
@@ -42,12 +42,33 @@ function App() {
     [providerId],
   );
 
+  const visibleModels = useMemo(() => {
+    if (providerId === 'ollama' && availableModels.length) {
+      return availableModels;
+    }
+
+    return selectedProvider.modelExamples;
+  }, [availableModels, providerId, selectedProvider.modelExamples]);
+
   const selectedProfile = useMemo(
     () => agentProfiles.find((profile) => profile.id === profileId) ?? agentProfiles[0],
     [profileId],
   );
 
   const ollamaProvider = useMemo(() => new OllamaProvider(ollamaBaseUrl), [ollamaBaseUrl]);
+
+  function handleProviderChange(nextProviderId: string) {
+    const nextProvider = providerOptions.find((provider) => provider.id === nextProviderId) ?? providerOptions[0];
+    setProviderId(nextProviderId);
+    setAvailableModels([]);
+    setModel(nextProvider.modelExamples[0] ?? 'select-model');
+
+    if (nextProviderId === 'ollama') {
+      setApiKeyLabel('Ollama local');
+    } else {
+      setApiKeyLabel(`${nextProvider.name} ready for API key`);
+    }
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -101,7 +122,7 @@ function App() {
             id: crypto.randomUUID(),
             role: 'assistant',
             content:
-              'This provider is listed but not wired yet. Ollama Local is currently integrated as the built-in provider.',
+              `${selectedProvider.name} is present in the app with model defaults. API-key storage and live cloud requests are the next wiring pass. Selected model: ${model}`,
           },
         ]);
       }
@@ -126,7 +147,9 @@ function App() {
 
   async function handleConnectProvider() {
     if (providerId !== 'ollama') {
-      setApiKeyLabel(`${selectedProvider.name} pending key`);
+      setAvailableModels(selectedProvider.modelExamples);
+      setModel(selectedProvider.modelExamples[0] ?? model);
+      setApiKeyLabel(`${selectedProvider.name} models loaded • API key needed for live chat`);
       return;
     }
 
@@ -195,11 +218,13 @@ function App() {
         </section>
 
         <section className="sidebar-section muted-list">
-          <h2>Local-first</h2>
-          <span>Ollama built in</span>
-          <span>No API key required</span>
-          <span>Cloud optional</span>
-          <span>Hardware companion ready</span>
+          <h2>Model Sources</h2>
+          <span>Ollama local</span>
+          <span>OpenAI</span>
+          <span>Anthropic</span>
+          <span>Gemini</span>
+          <span>OpenRouter</span>
+          <span>Groq / Mistral / Together</span>
         </section>
       </aside>
 
@@ -219,7 +244,7 @@ function App() {
             <section className="control-grid">
               <label>
                 Provider
-                <select value={providerId} onChange={(event) => setProviderId(event.target.value)}>
+                <select value={providerId} onChange={(event) => handleProviderChange(event.target.value)}>
                   {providerOptions.map((provider) => (
                     <option key={provider.id} value={provider.id}>
                       {provider.name}
@@ -243,25 +268,35 @@ function App() {
                 Model
                 <input list="available-models" value={model} onChange={(event) => setModel(event.target.value)} />
                 <datalist id="available-models">
-                  {availableModels.map((availableModel) => (
-                    <option key={availableModel} value={availableModel} />
+                  {visibleModels.map((visibleModel) => (
+                    <option key={visibleModel} value={visibleModel} />
                   ))}
                 </datalist>
               </label>
 
               <button className="connect-button" type="button" onClick={handleConnectProvider} disabled={isBusy}>
-                {isBusy ? 'Working...' : 'Connect Provider'}
+                {isBusy ? 'Working...' : providerId === 'ollama' ? 'Connect Ollama' : 'Load Cloud Models'}
               </button>
             </section>
 
-            {providerId === 'ollama' && (
+            {providerId === 'ollama' ? (
               <section className="local-provider-card">
                 <label>
                   Ollama local endpoint
                   <input value={ollamaBaseUrl} onChange={(event) => setOllamaBaseUrl(event.target.value)} />
                 </label>
                 <p>
-                  Built-in local provider. Run Ollama on this machine, pull a model, then click Connect Provider.
+                  Built-in local provider. Run Ollama on this machine, pull a model, then click Connect Ollama.
+                </p>
+              </section>
+            ) : (
+              <section className="local-provider-card">
+                <label>
+                  Cloud provider endpoint
+                  <input value={selectedProvider.baseUrlHint ?? 'provider SDK endpoint'} readOnly />
+                </label>
+                <p>
+                  Cloud model defaults are visible now. API-key storage and live requests come in the next provider wiring pass.
                 </p>
               </section>
             )}
@@ -291,7 +326,7 @@ function App() {
                   <textarea
                     value={input}
                     onChange={(event) => setInput(event.target.value)}
-                    placeholder={providerId === 'ollama' ? 'Ask your local Ollama model...' : 'Ask the selected cloud model...'}
+                    placeholder={providerId === 'ollama' ? 'Ask your local Ollama model...' : `Ask ${selectedProvider.name}...`}
                   />
                   <button type="submit" disabled={isBusy}>{isBusy ? '...' : 'Send'}</button>
                 </form>
@@ -338,8 +373,8 @@ function App() {
                 </div>
 
                 <div className="provider-preview">
-                  <h4>{providerId === 'ollama' ? 'Installed / Example Models' : 'Model Examples'}</h4>
-                  {(availableModels.length ? availableModels : selectedProvider.modelExamples).map((example) => (
+                  <h4>{providerId === 'ollama' && availableModels.length ? 'Installed Models' : 'Available Defaults'}</h4>
+                  {visibleModels.map((example) => (
                     <button key={example} type="button" onClick={() => setModel(example)}>
                       {example}
                     </button>
