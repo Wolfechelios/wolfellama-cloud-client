@@ -16,6 +16,21 @@ interface OllamaChatResponse {
   eval_count?: number;
 }
 
+interface OllamaGenerateResponse {
+  model?: string;
+  response?: string;
+  done?: boolean;
+  prompt_eval_count?: number;
+  eval_count?: number;
+}
+
+export interface OllamaGenerateRequest {
+  model: string;
+  prompt: string;
+  temperature?: number;
+  maxOutputTokens?: number;
+}
+
 export class OllamaProvider implements CloudModelProvider {
   readonly id = 'ollama';
   readonly name = 'Ollama Local';
@@ -50,6 +65,40 @@ export class OllamaProvider implements CloudModelProvider {
     } catch {
       return false;
     }
+  }
+
+  async sendGenerate(request: OllamaGenerateRequest): Promise<ChatResponse> {
+    const response = await fetch(`${this.baseUrl}/api/generate`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: request.model,
+        prompt: request.prompt,
+        stream: false,
+        options: {
+          temperature: request.temperature,
+          num_predict: request.maxOutputTokens,
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Ollama generate failed: ${response.status}`);
+    }
+
+    const data = (await response.json()) as OllamaGenerateResponse;
+
+    return {
+      model: data.model ?? request.model,
+      content: data.response ?? '',
+      finishReason: data.done ? 'done' : undefined,
+      usage: {
+        inputTokens: data.prompt_eval_count,
+        outputTokens: data.eval_count,
+      },
+    };
   }
 
   async sendChat(request: ChatRequest): Promise<ChatResponse> {
