@@ -4,9 +4,20 @@ export interface ProviderOption {
   description: string;
   baseUrlHint?: string;
   modelExamples: string[];
+  local?: boolean;
+  requiresApiKey?: boolean;
 }
 
 export const providerOptions: ProviderOption[] = [
+  {
+    id: 'ollama',
+    name: 'Ollama Local',
+    description: 'Built-in local model provider through Ollama on this machine. No cloud key required.',
+    baseUrlHint: 'http://127.0.0.1:11434',
+    modelExamples: ['llama3.1', 'qwen2.5-coder', 'mistral', 'gemma2'],
+    local: true,
+    requiresApiKey: false,
+  },
   {
     id: 'openai',
     name: 'OpenAI',
