@@ -20,6 +20,15 @@ export const providerOptions: ProviderOption[] = [
     requiresApiKey: false,
   },
   {
+    id: 'openrouter-manual',
+    name: 'Manual Model ID',
+    description: 'Use an exact OpenAI-compatible model ID copied from the provider model page.',
+    baseUrlHint: 'https://openrouter.ai/api/v1',
+    modelExamples: ['provider/model-name', 'organization/model-name', 'author/model-name'],
+    requiresApiKey: true,
+    openAICompatible: true,
+  },
+  {
     id: 'openai',
     name: 'OpenAI',
     description: 'OpenAI-compatible cloud models using an API key.',
