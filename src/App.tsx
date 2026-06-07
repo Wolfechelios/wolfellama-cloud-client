@@ -13,14 +13,16 @@ interface ChatMessage {
   id: string;
   role: MessageRole;
   content: string;
+  sendToModel?: boolean;
 }
 
 const starterMessages: ChatMessage[] = [
   {
     id: 'welcome',
     role: 'assistant',
+    sendToModel: false,
     content:
-      'WolfeLlama Cloud Client is ready. Ollama Local works as the built-in local provider. OpenAI-compatible cloud providers can now use API keys for live chat.',
+      'WolfeLlama Cloud Client is ready. This welcome message is UI-only and is not sent to your model.',
   },
 ];
 
@@ -53,6 +55,7 @@ function App() {
   const [availableModels, setAvailableModels] = useState<string[]>([]);
   const [isBusy, setIsBusy] = useState(false);
   const [pinnedModel, setPinnedModel] = useState(() => getSavedBool('wolfellama.pinnedModel', true));
+  const [sendSystemPrompt, setSendSystemPrompt] = useState(() => getSavedBool('wolfellama.sendSystemPrompt', false));
 
   const selectedProvider = useMemo(
     () => providerOptions.find((provider) => provider.id === providerId) ?? providerOptions[0],
@@ -105,23 +108,33 @@ function App() {
     window.localStorage.setItem('wolfellama.maxTokens', String(maxTokens));
     window.localStorage.setItem('wolfellama.memoryEnabled', String(memoryEnabled));
     window.localStorage.setItem('wolfellama.pinnedModel', String(pinnedModel));
-  }, [cloudBaseUrl, memoryEnabled, maxTokens, model, ollamaBaseUrl, pinnedModel, profileId, providerId, temperature]);
+    window.localStorage.setItem('wolfellama.sendSystemPrompt', String(sendSystemPrompt));
+  }, [cloudBaseUrl, memoryEnabled, maxTokens, model, ollamaBaseUrl, pinnedModel, profileId, providerId, sendSystemPrompt, temperature]);
 
   function buildProviderMessages(userText: string): ProviderChatMessage[] {
-    return [
-      {
-        role: 'system',
-        content: selectedProfile.systemPrompt,
-      },
-      ...messages.map((message) => ({
+    const priorMessages = messages
+      .filter((message) => message.sendToModel !== false)
+      .map((message) => ({
         role: message.role,
         content: message.content,
-      })),
-      {
-        role: 'user',
-        content: userText,
-      },
-    ];
+      }));
+
+    const outboundMessages: ProviderChatMessage[] = [];
+
+    if (sendSystemPrompt && selectedProfile.systemPrompt.trim()) {
+      outboundMessages.push({
+        role: 'system',
+        content: selectedProfile.systemPrompt,
+      });
+    }
+
+    outboundMessages.push(...priorMessages);
+    outboundMessages.push({
+      role: 'user',
+      content: userText,
+    });
+
+    return outboundMessages;
   }
 
   function handleProviderChange(nextProviderId: string) {
@@ -256,6 +269,7 @@ function App() {
           {
             id: crypto.randomUUID(),
             role: 'assistant',
+            sendToModel: false,
             content:
               `${selectedProvider.name} connection failed: ${error instanceof Error ? error.message : 'Unknown error'}\n\nModel selection is kept as: ${model}`,
           },
@@ -282,6 +296,7 @@ function App() {
         {
           id: crypto.randomUUID(),
           role: 'assistant',
+          sendToModel: false,
           content:
             `Ollama connection failed: ${error instanceof Error ? error.message : 'Unknown error'}\n\nModel selection is kept as: ${model}`,
         },
@@ -466,6 +481,15 @@ function App() {
                   />
                 </label>
 
+                <label className="toggle-row">
+                  Send profile prompt
+                  <input
+                    type="checkbox"
+                    checked={sendSystemPrompt}
+                    onChange={(event) => setSendSystemPrompt(event.target.checked)}
+                  />
+                </label>
+
                 <label>
                   Temperature
                   <input
@@ -500,8 +524,8 @@ function App() {
                 </label>
 
                 <div className="profile-preview">
-                  <h4>Active System Prompt</h4>
-                  <p>{selectedProfile.systemPrompt}</p>
+                  <h4>Profile Prompt</h4>
+                  <p>{sendSystemPrompt ? selectedProfile.systemPrompt : 'Off — model receives only real chat messages.'}</p>
                 </div>
 
                 <div className="provider-preview">
