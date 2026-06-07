@@ -2,6 +2,7 @@ import { FormEvent, useMemo, useState } from 'react';
 import { ChameleonGuiPanel } from './components/hardware/ChameleonGuiPanel';
 import { agentProfiles } from './data/profiles';
 import { providerOptions } from './data/providers';
+import { OllamaProvider } from './providers/ollama';
 
 type MessageRole = 'user' | 'assistant';
 type ActiveView = 'chat' | 'hardware';
@@ -17,21 +18,24 @@ const starterMessages: ChatMessage[] = [
     id: 'welcome',
     role: 'assistant',
     content:
-      'WolfeLlama Cloud Client is ready. Choose a provider, pick a profile, and start a clean cloud-model chat.',
+      'WolfeLlama Cloud Client is ready. Ollama Local is built in as the default local provider. Cloud providers can be connected when needed.',
   },
 ];
 
 function App() {
   const [activeView, setActiveView] = useState<ActiveView>('chat');
-  const [providerId, setProviderId] = useState('openrouter');
+  const [providerId, setProviderId] = useState('ollama');
   const [profileId, setProfileId] = useState('general');
-  const [model, setModel] = useState('select-model-after-connection');
-  const [apiKeyLabel, setApiKeyLabel] = useState('Not connected');
+  const [model, setModel] = useState('llama3.1');
+  const [ollamaBaseUrl, setOllamaBaseUrl] = useState('http://127.0.0.1:11434');
+  const [apiKeyLabel, setApiKeyLabel] = useState('Ollama local');
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>(starterMessages);
   const [temperature, setTemperature] = useState(0.7);
   const [maxTokens, setMaxTokens] = useState(1200);
   const [memoryEnabled, setMemoryEnabled] = useState(true);
+  const [availableModels, setAvailableModels] = useState<string[]>([]);
+  const [isBusy, setIsBusy] = useState(false);
 
   const selectedProvider = useMemo(
     () => providerOptions.find((provider) => provider.id === providerId) ?? providerOptions[0],
@@ -43,10 +47,12 @@ function App() {
     [profileId],
   );
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  const ollamaProvider = useMemo(() => new OllamaProvider(ollamaBaseUrl), [ollamaBaseUrl]);
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const trimmed = input.trim();
-    if (!trimmed) return;
+    if (!trimmed || isBusy) return;
 
     const userMessage: ChatMessage = {
       id: crypto.randomUUID(),
@@ -54,20 +60,99 @@ function App() {
       content: trimmed,
     };
 
-    const assistantMessage: ChatMessage = {
-      id: crypto.randomUUID(),
-      role: 'assistant',
-      content:
-        'Cloud adapter not connected yet. Next pass wires this screen to provider adapters, keychain storage, and streaming responses.',
-    };
-
-    setMessages((current) => [...current, userMessage, assistantMessage]);
+    setMessages((current) => [...current, userMessage]);
     setInput('');
+    setIsBusy(true);
+
+    try {
+      if (providerId === 'ollama') {
+        const response = await ollamaProvider.sendChat({
+          model,
+          temperature,
+          maxOutputTokens: maxTokens,
+          messages: [
+            {
+              role: 'system',
+              content: selectedProfile.systemPrompt,
+            },
+            ...messages.map((message) => ({
+              role: message.role,
+              content: message.content,
+            })),
+            {
+              role: 'user',
+              content: trimmed,
+            },
+          ],
+        });
+
+        setMessages((current) => [
+          ...current,
+          {
+            id: crypto.randomUUID(),
+            role: 'assistant',
+            content: response.content || 'Ollama returned an empty response.',
+          },
+        ]);
+      } else {
+        setMessages((current) => [
+          ...current,
+          {
+            id: crypto.randomUUID(),
+            role: 'assistant',
+            content:
+              'This provider is listed but not wired yet. Ollama Local is currently integrated as the built-in provider.',
+          },
+        ]);
+      }
+    } catch (error) {
+      setMessages((current) => [
+        ...current,
+        {
+          id: crypto.randomUUID(),
+          role: 'assistant',
+          content: `Provider error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        },
+      ]);
+    } finally {
+      setIsBusy(false);
+    }
   }
 
   function sendHardwareOutputToChat(text: string) {
     setInput(text);
     setActiveView('chat');
+  }
+
+  async function handleConnectProvider() {
+    if (providerId !== 'ollama') {
+      setApiKeyLabel(`${selectedProvider.name} pending key`);
+      return;
+    }
+
+    setIsBusy(true);
+    try {
+      const models = await ollamaProvider.listModels();
+      const names = models.map((item) => item.name);
+      setAvailableModels(names);
+      setApiKeyLabel(names.length ? `Ollama connected • ${names.length} models` : 'Ollama connected • no models found');
+      if (names.length && model === 'llama3.1') {
+        setModel(names[0]);
+      }
+    } catch (error) {
+      setApiKeyLabel('Ollama not reachable');
+      setMessages((current) => [
+        ...current,
+        {
+          id: crypto.randomUUID(),
+          role: 'assistant',
+          content:
+            `Ollama connection failed: ${error instanceof Error ? error.message : 'Unknown error'}\n\nStart Ollama, then try Connect Provider again. Default endpoint: ${ollamaBaseUrl}`,
+        },
+      ]);
+    } finally {
+      setIsBusy(false);
+    }
   }
 
   return (
@@ -77,7 +162,7 @@ function App() {
           <div className="brand-mark">WL</div>
           <div>
             <h1>WolfeLlama</h1>
-            <p>Cloud Client</p>
+            <p>Cloud + Local Client</p>
           </div>
         </div>
 
@@ -110,18 +195,18 @@ function App() {
         </section>
 
         <section className="sidebar-section muted-list">
-          <h2>Excluded</h2>
-          <span>GitHub tools</span>
-          <span>Package testing</span>
-          <span>Sandbox runner</span>
-          <span>Repo scanner</span>
+          <h2>Local-first</h2>
+          <span>Ollama built in</span>
+          <span>No API key required</span>
+          <span>Cloud optional</span>
+          <span>Hardware companion ready</span>
         </section>
       </aside>
 
       <section className="main-panel">
         <header className="topbar">
           <div>
-            <p className="eyebrow">Private cloud AI console</p>
+            <p className="eyebrow">Private AI console</p>
             <h2>{activeView === 'hardware' ? 'Hardware' : selectedProfile.name}</h2>
           </div>
           <div className="status-pill">{activeView === 'hardware' ? 'Chameleon companion' : apiKeyLabel}</div>
@@ -156,13 +241,30 @@ function App() {
 
               <label>
                 Model
-                <input value={model} onChange={(event) => setModel(event.target.value)} />
+                <input list="available-models" value={model} onChange={(event) => setModel(event.target.value)} />
+                <datalist id="available-models">
+                  {availableModels.map((availableModel) => (
+                    <option key={availableModel} value={availableModel} />
+                  ))}
+                </datalist>
               </label>
 
-              <button className="connect-button" type="button" onClick={() => setApiKeyLabel(`${selectedProvider.name} pending key`)}>
-                Connect Provider
+              <button className="connect-button" type="button" onClick={handleConnectProvider} disabled={isBusy}>
+                {isBusy ? 'Working...' : 'Connect Provider'}
               </button>
             </section>
+
+            {providerId === 'ollama' && (
+              <section className="local-provider-card">
+                <label>
+                  Ollama local endpoint
+                  <input value={ollamaBaseUrl} onChange={(event) => setOllamaBaseUrl(event.target.value)} />
+                </label>
+                <p>
+                  Built-in local provider. Run Ollama on this machine, pull a model, then click Connect Provider.
+                </p>
+              </section>
+            )}
 
             <section className="workspace">
               <div className="chat-card">
@@ -189,9 +291,9 @@ function App() {
                   <textarea
                     value={input}
                     onChange={(event) => setInput(event.target.value)}
-                    placeholder="Ask the selected cloud model..."
+                    placeholder={providerId === 'ollama' ? 'Ask your local Ollama model...' : 'Ask the selected cloud model...'}
                   />
-                  <button type="submit">Send</button>
+                  <button type="submit" disabled={isBusy}>{isBusy ? '...' : 'Send'}</button>
                 </form>
               </div>
 
@@ -236,8 +338,8 @@ function App() {
                 </div>
 
                 <div className="provider-preview">
-                  <h4>Model Examples</h4>
-                  {selectedProvider.modelExamples.map((example) => (
+                  <h4>{providerId === 'ollama' ? 'Installed / Example Models' : 'Model Examples'}</h4>
+                  {(availableModels.length ? availableModels : selectedProvider.modelExamples).map((example) => (
                     <button key={example} type="button" onClick={() => setModel(example)}>
                       {example}
                     </button>
