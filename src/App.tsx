@@ -1,8 +1,10 @@
 import { FormEvent, useMemo, useState } from 'react';
+import { ChameleonGuiPanel } from './components/hardware/ChameleonGuiPanel';
 import { agentProfiles } from './data/profiles';
 import { providerOptions } from './data/providers';
 
 type MessageRole = 'user' | 'assistant';
+type ActiveView = 'chat' | 'hardware';
 
 interface ChatMessage {
   id: string;
@@ -20,6 +22,7 @@ const starterMessages: ChatMessage[] = [
 ];
 
 function App() {
+  const [activeView, setActiveView] = useState<ActiveView>('chat');
   const [providerId, setProviderId] = useState('openrouter');
   const [profileId, setProfileId] = useState('general');
   const [model, setModel] = useState('select-model-after-connection');
@@ -62,6 +65,11 @@ function App() {
     setInput('');
   }
 
+  function sendHardwareOutputToChat(text: string) {
+    setInput(text);
+    setActiveView('chat');
+  }
+
   return (
     <main className="app-shell">
       <aside className="sidebar">
@@ -78,9 +86,20 @@ function App() {
         </button>
 
         <section className="sidebar-section">
-          <h2>Chats</h2>
-          <button className="history-item active" type="button">
+          <h2>Workspace</h2>
+          <button
+            className={`history-item ${activeView === 'chat' ? 'active' : ''}`}
+            type="button"
+            onClick={() => setActiveView('chat')}
+          >
             Command Room
+          </button>
+          <button
+            className={`history-item ${activeView === 'hardware' ? 'active' : ''}`}
+            type="button"
+            onClick={() => setActiveView('hardware')}
+          >
+            Hardware
           </button>
           <button className="history-item" type="button">
             Provider Setup
@@ -103,125 +122,131 @@ function App() {
         <header className="topbar">
           <div>
             <p className="eyebrow">Private cloud AI console</p>
-            <h2>{selectedProfile.name}</h2>
+            <h2>{activeView === 'hardware' ? 'Hardware' : selectedProfile.name}</h2>
           </div>
-          <div className="status-pill">{apiKeyLabel}</div>
+          <div className="status-pill">{activeView === 'hardware' ? 'Chameleon companion' : apiKeyLabel}</div>
         </header>
 
-        <section className="control-grid">
-          <label>
-            Provider
-            <select value={providerId} onChange={(event) => setProviderId(event.target.value)}>
-              {providerOptions.map((provider) => (
-                <option key={provider.id} value={provider.id}>
-                  {provider.name}
-                </option>
-              ))}
-            </select>
-          </label>
+        {activeView === 'hardware' ? (
+          <ChameleonGuiPanel onSendToChat={sendHardwareOutputToChat} />
+        ) : (
+          <>
+            <section className="control-grid">
+              <label>
+                Provider
+                <select value={providerId} onChange={(event) => setProviderId(event.target.value)}>
+                  {providerOptions.map((provider) => (
+                    <option key={provider.id} value={provider.id}>
+                      {provider.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
 
-          <label>
-            Profile
-            <select value={profileId} onChange={(event) => setProfileId(event.target.value)}>
-              {agentProfiles.map((profile) => (
-                <option key={profile.id} value={profile.id}>
-                  {profile.name}
-                </option>
-              ))}
-            </select>
-          </label>
+              <label>
+                Profile
+                <select value={profileId} onChange={(event) => setProfileId(event.target.value)}>
+                  {agentProfiles.map((profile) => (
+                    <option key={profile.id} value={profile.id}>
+                      {profile.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
 
-          <label>
-            Model
-            <input value={model} onChange={(event) => setModel(event.target.value)} />
-          </label>
+              <label>
+                Model
+                <input value={model} onChange={(event) => setModel(event.target.value)} />
+              </label>
 
-          <button className="connect-button" type="button" onClick={() => setApiKeyLabel(`${selectedProvider.name} pending key`)}>
-            Connect Provider
-          </button>
-        </section>
-
-        <section className="workspace">
-          <div className="chat-card">
-            <div className="chat-header">
-              <div>
-                <h3>Chat</h3>
-                <p>{selectedProvider.description}</p>
-              </div>
-              <button type="button" className="ghost-button">
-                Export
+              <button className="connect-button" type="button" onClick={() => setApiKeyLabel(`${selectedProvider.name} pending key`)}>
+                Connect Provider
               </button>
-            </div>
+            </section>
 
-            <div className="message-list">
-              {messages.map((message) => (
-                <article key={message.id} className={`message ${message.role}`}>
-                  <span>{message.role === 'user' ? 'You' : 'WolfeLlama'}</span>
-                  <p>{message.content}</p>
-                </article>
-              ))}
-            </div>
+            <section className="workspace">
+              <div className="chat-card">
+                <div className="chat-header">
+                  <div>
+                    <h3>Chat</h3>
+                    <p>{selectedProvider.description}</p>
+                  </div>
+                  <button type="button" className="ghost-button">
+                    Export
+                  </button>
+                </div>
 
-            <form className="composer" onSubmit={handleSubmit}>
-              <textarea
-                value={input}
-                onChange={(event) => setInput(event.target.value)}
-                placeholder="Ask the selected cloud model..."
-              />
-              <button type="submit">Send</button>
-            </form>
-          </div>
+                <div className="message-list">
+                  {messages.map((message) => (
+                    <article key={message.id} className={`message ${message.role}`}>
+                      <span>{message.role === 'user' ? 'You' : 'WolfeLlama'}</span>
+                      <p>{message.content}</p>
+                    </article>
+                  ))}
+                </div>
 
-          <aside className="settings-card">
-            <h3>Session Controls</h3>
-            <label>
-              Temperature
-              <input
-                type="range"
-                min="0"
-                max="2"
-                step="0.1"
-                value={temperature}
-                onChange={(event) => setTemperature(Number(event.target.value))}
-              />
-              <strong>{temperature.toFixed(1)}</strong>
-            </label>
+                <form className="composer" onSubmit={handleSubmit}>
+                  <textarea
+                    value={input}
+                    onChange={(event) => setInput(event.target.value)}
+                    placeholder="Ask the selected cloud model..."
+                  />
+                  <button type="submit">Send</button>
+                </form>
+              </div>
 
-            <label>
-              Max output tokens
-              <input
-                type="number"
-                min="64"
-                max="32000"
-                value={maxTokens}
-                onChange={(event) => setMaxTokens(Number(event.target.value))}
-              />
-            </label>
+              <aside className="settings-card">
+                <h3>Session Controls</h3>
+                <label>
+                  Temperature
+                  <input
+                    type="range"
+                    min="0"
+                    max="2"
+                    step="0.1"
+                    value={temperature}
+                    onChange={(event) => setTemperature(Number(event.target.value))}
+                  />
+                  <strong>{temperature.toFixed(1)}</strong>
+                </label>
 
-            <label className="toggle-row">
-              Local memory
-              <input
-                type="checkbox"
-                checked={memoryEnabled}
-                onChange={(event) => setMemoryEnabled(event.target.checked)}
-              />
-            </label>
+                <label>
+                  Max output tokens
+                  <input
+                    type="number"
+                    min="64"
+                    max="32000"
+                    value={maxTokens}
+                    onChange={(event) => setMaxTokens(Number(event.target.value))}
+                  />
+                </label>
 
-            <div className="profile-preview">
-              <h4>Active System Prompt</h4>
-              <p>{selectedProfile.systemPrompt}</p>
-            </div>
+                <label className="toggle-row">
+                  Local memory
+                  <input
+                    type="checkbox"
+                    checked={memoryEnabled}
+                    onChange={(event) => setMemoryEnabled(event.target.checked)}
+                  />
+                </label>
 
-            <div className="provider-preview">
-              <h4>Model Examples</h4>
-              {selectedProvider.modelExamples.map((example) => (
-                <button key={example} type="button" onClick={() => setModel(example)}>
-                  {example}
-                </button>
-              ))}
-            </div>
-          </aside>
-        </section>
+                <div className="profile-preview">
+                  <h4>Active System Prompt</h4>
+                  <p>{selectedProfile.systemPrompt}</p>
+                </div>
+
+                <div className="provider-preview">
+                  <h4>Model Examples</h4>
+                  {selectedProvider.modelExamples.map((example) => (
+                    <button key={example} type="button" onClick={() => setModel(example)}>
+                      {example}
+                    </button>
+                  ))}
+                </div>
+              </aside>
+            </section>
+          </>
+        )}
       </section>
     </main>
   );
