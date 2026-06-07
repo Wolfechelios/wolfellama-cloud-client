@@ -1,4 +1,4 @@
-import { FormEvent, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { ChameleonGuiPanel } from './components/hardware/ChameleonGuiPanel';
 import { agentProfiles } from './data/profiles';
 import { providerOptions } from './data/providers';
@@ -24,22 +24,35 @@ const starterMessages: ChatMessage[] = [
   },
 ];
 
+function getSavedText(key: string, fallback: string) {
+  if (typeof window === 'undefined') return fallback;
+  return window.localStorage.getItem(key) ?? fallback;
+}
+
+function getSavedBool(key: string, fallback: boolean) {
+  if (typeof window === 'undefined') return fallback;
+  const value = window.localStorage.getItem(key);
+  if (value === null) return fallback;
+  return value === 'true';
+}
+
 function App() {
   const [activeView, setActiveView] = useState<ActiveView>('chat');
-  const [providerId, setProviderId] = useState('ollama');
-  const [profileId, setProfileId] = useState('general');
-  const [model, setModel] = useState('llama3.1');
-  const [ollamaBaseUrl, setOllamaBaseUrl] = useState('http://127.0.0.1:11434');
-  const [cloudBaseUrl, setCloudBaseUrl] = useState('');
+  const [providerId, setProviderId] = useState(() => getSavedText('wolfellama.providerId', 'ollama'));
+  const [profileId, setProfileId] = useState(() => getSavedText('wolfellama.profileId', 'general'));
+  const [model, setModel] = useState(() => getSavedText('wolfellama.model', 'llama3.1'));
+  const [ollamaBaseUrl, setOllamaBaseUrl] = useState(() => getSavedText('wolfellama.ollamaBaseUrl', 'http://127.0.0.1:11434'));
+  const [cloudBaseUrl, setCloudBaseUrl] = useState(() => getSavedText('wolfellama.cloudBaseUrl', ''));
   const [cloudApiKey, setCloudApiKey] = useState('');
   const [apiKeyLabel, setApiKeyLabel] = useState('Ollama local');
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>(starterMessages);
-  const [temperature, setTemperature] = useState(0.7);
-  const [maxTokens, setMaxTokens] = useState(1200);
-  const [memoryEnabled, setMemoryEnabled] = useState(true);
+  const [temperature, setTemperature] = useState(() => Number(getSavedText('wolfellama.temperature', '0.7')));
+  const [maxTokens, setMaxTokens] = useState(() => Number(getSavedText('wolfellama.maxTokens', '1200')));
+  const [memoryEnabled, setMemoryEnabled] = useState(() => getSavedBool('wolfellama.memoryEnabled', true));
   const [availableModels, setAvailableModels] = useState<string[]>([]);
   const [isBusy, setIsBusy] = useState(false);
+  const [pinnedModel, setPinnedModel] = useState(() => getSavedBool('wolfellama.pinnedModel', true));
 
   const selectedProvider = useMemo(
     () => providerOptions.find((provider) => provider.id === providerId) ?? providerOptions[0],
@@ -82,6 +95,18 @@ function App() {
     });
   }, [cloudApiKey, cloudBaseUrl, providerId, selectedProvider]);
 
+  useEffect(() => {
+    window.localStorage.setItem('wolfellama.providerId', providerId);
+    window.localStorage.setItem('wolfellama.profileId', profileId);
+    window.localStorage.setItem('wolfellama.model', model);
+    window.localStorage.setItem('wolfellama.ollamaBaseUrl', ollamaBaseUrl);
+    window.localStorage.setItem('wolfellama.cloudBaseUrl', cloudBaseUrl);
+    window.localStorage.setItem('wolfellama.temperature', String(temperature));
+    window.localStorage.setItem('wolfellama.maxTokens', String(maxTokens));
+    window.localStorage.setItem('wolfellama.memoryEnabled', String(memoryEnabled));
+    window.localStorage.setItem('wolfellama.pinnedModel', String(pinnedModel));
+  }, [cloudBaseUrl, memoryEnabled, maxTokens, model, ollamaBaseUrl, pinnedModel, profileId, providerId, temperature]);
+
   function buildProviderMessages(userText: string): ProviderChatMessage[] {
     return [
       {
@@ -103,7 +128,9 @@ function App() {
     const nextProvider = providerOptions.find((provider) => provider.id === nextProviderId) ?? providerOptions[0];
     setProviderId(nextProviderId);
     setAvailableModels([]);
-    setModel(nextProvider.modelExamples[0] ?? 'select-model');
+    if (!pinnedModel) {
+      setModel(nextProvider.modelExamples[0] ?? 'select-model');
+    }
 
     if (nextProviderId === 'ollama') {
       setApiKeyLabel('Ollama local');
@@ -112,6 +139,11 @@ function App() {
 
     setCloudBaseUrl(nextProvider.baseUrlHint ?? '');
     setApiKeyLabel(nextProvider.openAICompatible ? `${nextProvider.name} ready for API key` : `${nextProvider.name} native adapter pending`);
+  }
+
+  function handleModelChange(nextModel: string) {
+    setModel(nextModel);
+    setPinnedModel(true);
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -210,9 +242,12 @@ function App() {
       try {
         const models = await cloudProvider.listModels();
         const names = models.map((item) => item.name);
-        setAvailableModels(names.length ? names : selectedProvider.modelExamples);
-        setModel((names.length ? names : selectedProvider.modelExamples)[0] ?? model);
-        setApiKeyLabel(`${selectedProvider.name} connected • ${(names.length ? names : selectedProvider.modelExamples).length} models`);
+        const nextModels = names.length ? names : selectedProvider.modelExamples;
+        setAvailableModels(nextModels);
+        if (!pinnedModel) {
+          setModel(nextModels[0] ?? model);
+        }
+        setApiKeyLabel(`${selectedProvider.name} connected • ${nextModels.length} models`);
       } catch (error) {
         setAvailableModels(selectedProvider.modelExamples);
         setApiKeyLabel(`${selectedProvider.name} model fetch failed`);
@@ -222,7 +257,7 @@ function App() {
             id: crypto.randomUUID(),
             role: 'assistant',
             content:
-              `${selectedProvider.name} connection failed: ${error instanceof Error ? error.message : 'Unknown error'}\n\nCheck the API key, base URL, and selected model. Default model options are still shown.`,
+              `${selectedProvider.name} connection failed: ${error instanceof Error ? error.message : 'Unknown error'}\n\nModel selection is kept as: ${model}`,
           },
         ]);
       } finally {
@@ -237,7 +272,7 @@ function App() {
       const names = models.map((item) => item.name);
       setAvailableModels(names);
       setApiKeyLabel(names.length ? `Ollama connected • ${names.length} models` : 'Ollama connected • no models found');
-      if (names.length && model === 'llama3.1') {
+      if (names.length && !pinnedModel) {
         setModel(names[0]);
       }
     } catch (error) {
@@ -248,7 +283,7 @@ function App() {
           id: crypto.randomUUID(),
           role: 'assistant',
           content:
-            `Ollama connection failed: ${error instanceof Error ? error.message : 'Unknown error'}\n\nStart Ollama, then try Connect Ollama again. Default endpoint: ${ollamaBaseUrl}`,
+            `Ollama connection failed: ${error instanceof Error ? error.message : 'Unknown error'}\n\nModel selection is kept as: ${model}`,
         },
       ]);
     } finally {
@@ -343,7 +378,7 @@ function App() {
 
               <label>
                 Model
-                <input list="available-models" value={model} onChange={(event) => setModel(event.target.value)} />
+                <input list="available-models" value={model} onChange={(event) => handleModelChange(event.target.value)} />
                 <datalist id="available-models">
                   {visibleModels.map((visibleModel) => (
                     <option key={visibleModel} value={visibleModel} />
@@ -422,6 +457,15 @@ function App() {
 
               <aside className="settings-card">
                 <h3>Session Controls</h3>
+                <label className="toggle-row">
+                  Pin model
+                  <input
+                    type="checkbox"
+                    checked={pinnedModel}
+                    onChange={(event) => setPinnedModel(event.target.checked)}
+                  />
+                </label>
+
                 <label>
                   Temperature
                   <input
@@ -463,7 +507,7 @@ function App() {
                 <div className="provider-preview">
                   <h4>{providerId === 'ollama' && availableModels.length ? 'Installed Models' : 'Available Models'}</h4>
                   {visibleModels.map((example) => (
-                    <button key={example} type="button" onClick={() => setModel(example)}>
+                    <button key={example} type="button" onClick={() => handleModelChange(example)}>
                       {example}
                     </button>
                   ))}
