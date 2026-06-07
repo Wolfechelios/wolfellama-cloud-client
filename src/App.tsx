@@ -3,6 +3,8 @@ import { ChameleonGuiPanel } from './components/hardware/ChameleonGuiPanel';
 import { agentProfiles } from './data/profiles';
 import { providerOptions } from './data/providers';
 import { OllamaProvider } from './providers/ollama';
+import { OpenAICompatibleProvider } from './providers/openaiCompatible';
+import type { ChatMessage as ProviderChatMessage } from './providers/types';
 
 type MessageRole = 'user' | 'assistant';
 type ActiveView = 'chat' | 'hardware';
@@ -18,7 +20,7 @@ const starterMessages: ChatMessage[] = [
     id: 'welcome',
     role: 'assistant',
     content:
-      'WolfeLlama Cloud Client is ready. Ollama Local is built in as the default local provider. Cloud providers are present in the selector and can be wired with API keys next.',
+      'WolfeLlama Cloud Client is ready. Ollama Local works as the built-in local provider. OpenAI-compatible cloud providers can now use API keys for live chat.',
   },
 ];
 
@@ -28,6 +30,8 @@ function App() {
   const [profileId, setProfileId] = useState('general');
   const [model, setModel] = useState('llama3.1');
   const [ollamaBaseUrl, setOllamaBaseUrl] = useState('http://127.0.0.1:11434');
+  const [cloudBaseUrl, setCloudBaseUrl] = useState('');
+  const [cloudApiKey, setCloudApiKey] = useState('');
   const [apiKeyLabel, setApiKeyLabel] = useState('Ollama local');
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>(starterMessages);
@@ -47,6 +51,10 @@ function App() {
       return availableModels;
     }
 
+    if (providerId !== 'ollama' && availableModels.length) {
+      return availableModels;
+    }
+
     return selectedProvider.modelExamples;
   }, [availableModels, providerId, selectedProvider.modelExamples]);
 
@@ -57,6 +65,40 @@ function App() {
 
   const ollamaProvider = useMemo(() => new OllamaProvider(ollamaBaseUrl), [ollamaBaseUrl]);
 
+  const cloudProvider = useMemo(() => {
+    if (!selectedProvider.openAICompatible || providerId === 'ollama') return undefined;
+
+    return new OpenAICompatibleProvider({
+      id: selectedProvider.id,
+      name: selectedProvider.name,
+      baseUrl: cloudBaseUrl || selectedProvider.baseUrlHint || '',
+      apiKey: cloudApiKey,
+      defaultModels: selectedProvider.modelExamples.map((name) => ({
+        id: name,
+        name,
+        providerId: selectedProvider.id,
+        supportsStreaming: false,
+      })),
+    });
+  }, [cloudApiKey, cloudBaseUrl, providerId, selectedProvider]);
+
+  function buildProviderMessages(userText: string): ProviderChatMessage[] {
+    return [
+      {
+        role: 'system',
+        content: selectedProfile.systemPrompt,
+      },
+      ...messages.map((message) => ({
+        role: message.role,
+        content: message.content,
+      })),
+      {
+        role: 'user',
+        content: userText,
+      },
+    ];
+  }
+
   function handleProviderChange(nextProviderId: string) {
     const nextProvider = providerOptions.find((provider) => provider.id === nextProviderId) ?? providerOptions[0];
     setProviderId(nextProviderId);
@@ -65,9 +107,11 @@ function App() {
 
     if (nextProviderId === 'ollama') {
       setApiKeyLabel('Ollama local');
-    } else {
-      setApiKeyLabel(`${nextProvider.name} ready for API key`);
+      return;
     }
+
+    setCloudBaseUrl(nextProvider.baseUrlHint ?? '');
+    setApiKeyLabel(nextProvider.openAICompatible ? `${nextProvider.name} ready for API key` : `${nextProvider.name} native adapter pending`);
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -91,20 +135,7 @@ function App() {
           model,
           temperature,
           maxOutputTokens: maxTokens,
-          messages: [
-            {
-              role: 'system',
-              content: selectedProfile.systemPrompt,
-            },
-            ...messages.map((message) => ({
-              role: message.role,
-              content: message.content,
-            })),
-            {
-              role: 'user',
-              content: trimmed,
-            },
-          ],
+          messages: buildProviderMessages(trimmed),
         });
 
         setMessages((current) => [
@@ -115,6 +146,22 @@ function App() {
             content: response.content || 'Ollama returned an empty response.',
           },
         ]);
+      } else if (cloudProvider) {
+        const response = await cloudProvider.sendChat({
+          model,
+          temperature,
+          maxOutputTokens: maxTokens,
+          messages: buildProviderMessages(trimmed),
+        });
+
+        setMessages((current) => [
+          ...current,
+          {
+            id: crypto.randomUUID(),
+            role: 'assistant',
+            content: response.content || `${selectedProvider.name} returned an empty response.`,
+          },
+        ]);
       } else {
         setMessages((current) => [
           ...current,
@@ -122,7 +169,7 @@ function App() {
             id: crypto.randomUUID(),
             role: 'assistant',
             content:
-              `${selectedProvider.name} is present in the app with model defaults. API-key storage and live cloud requests are the next wiring pass. Selected model: ${model}`,
+              `${selectedProvider.name} is visible, but it needs a native adapter. Use OpenAI, OpenRouter, Groq, Mistral, Together, Perplexity, or Custom for live cloud chat right now.`,
           },
         ]);
       }
@@ -147,9 +194,40 @@ function App() {
 
   async function handleConnectProvider() {
     if (providerId !== 'ollama') {
-      setAvailableModels(selectedProvider.modelExamples);
-      setModel(selectedProvider.modelExamples[0] ?? model);
-      setApiKeyLabel(`${selectedProvider.name} models loaded • API key needed for live chat`);
+      if (!selectedProvider.openAICompatible || !cloudProvider) {
+        setApiKeyLabel(`${selectedProvider.name} native adapter pending`);
+        setAvailableModels(selectedProvider.modelExamples);
+        return;
+      }
+
+      if (!cloudApiKey.trim()) {
+        setApiKeyLabel(`${selectedProvider.name} needs API key`);
+        setAvailableModels(selectedProvider.modelExamples);
+        return;
+      }
+
+      setIsBusy(true);
+      try {
+        const models = await cloudProvider.listModels();
+        const names = models.map((item) => item.name);
+        setAvailableModels(names.length ? names : selectedProvider.modelExamples);
+        setModel((names.length ? names : selectedProvider.modelExamples)[0] ?? model);
+        setApiKeyLabel(`${selectedProvider.name} connected • ${(names.length ? names : selectedProvider.modelExamples).length} models`);
+      } catch (error) {
+        setAvailableModels(selectedProvider.modelExamples);
+        setApiKeyLabel(`${selectedProvider.name} model fetch failed`);
+        setMessages((current) => [
+          ...current,
+          {
+            id: crypto.randomUUID(),
+            role: 'assistant',
+            content:
+              `${selectedProvider.name} connection failed: ${error instanceof Error ? error.message : 'Unknown error'}\n\nCheck the API key, base URL, and selected model. Default model options are still shown.`,
+          },
+        ]);
+      } finally {
+        setIsBusy(false);
+      }
       return;
     }
 
@@ -170,7 +248,7 @@ function App() {
           id: crypto.randomUUID(),
           role: 'assistant',
           content:
-            `Ollama connection failed: ${error instanceof Error ? error.message : 'Unknown error'}\n\nStart Ollama, then try Connect Provider again. Default endpoint: ${ollamaBaseUrl}`,
+            `Ollama connection failed: ${error instanceof Error ? error.message : 'Unknown error'}\n\nStart Ollama, then try Connect Ollama again. Default endpoint: ${ollamaBaseUrl}`,
         },
       ]);
     } finally {
@@ -218,13 +296,12 @@ function App() {
         </section>
 
         <section className="sidebar-section muted-list">
-          <h2>Model Sources</h2>
+          <h2>Live Now</h2>
           <span>Ollama local</span>
-          <span>OpenAI</span>
-          <span>Anthropic</span>
-          <span>Gemini</span>
+          <span>OpenAI-compatible cloud</span>
           <span>OpenRouter</span>
           <span>Groq / Mistral / Together</span>
+          <span>Perplexity / Custom</span>
         </section>
       </aside>
 
@@ -275,7 +352,7 @@ function App() {
               </label>
 
               <button className="connect-button" type="button" onClick={handleConnectProvider} disabled={isBusy}>
-                {isBusy ? 'Working...' : providerId === 'ollama' ? 'Connect Ollama' : 'Load Cloud Models'}
+                {isBusy ? 'Working...' : providerId === 'ollama' ? 'Connect Ollama' : 'Connect Cloud'}
               </button>
             </section>
 
@@ -290,13 +367,24 @@ function App() {
                 </p>
               </section>
             ) : (
-              <section className="local-provider-card">
+              <section className="local-provider-card cloud-config-card">
                 <label>
-                  Cloud provider endpoint
-                  <input value={selectedProvider.baseUrlHint ?? 'provider SDK endpoint'} readOnly />
+                  Cloud API key
+                  <input
+                    type="password"
+                    value={cloudApiKey}
+                    onChange={(event) => setCloudApiKey(event.target.value)}
+                    placeholder="Paste provider API key"
+                  />
+                </label>
+                <label>
+                  Base URL
+                  <input value={cloudBaseUrl || selectedProvider.baseUrlHint || ''} onChange={(event) => setCloudBaseUrl(event.target.value)} />
                 </label>
                 <p>
-                  Cloud model defaults are visible now. API-key storage and live requests come in the next provider wiring pass.
+                  {selectedProvider.openAICompatible
+                    ? 'Live cloud chat is wired for this provider. Keys are currently session-only until OS keychain storage is connected.'
+                    : 'This provider needs a native adapter. Use OpenRouter as a bridge for this model family for now.'}
                 </p>
               </section>
             )}
@@ -373,7 +461,7 @@ function App() {
                 </div>
 
                 <div className="provider-preview">
-                  <h4>{providerId === 'ollama' && availableModels.length ? 'Installed Models' : 'Available Defaults'}</h4>
+                  <h4>{providerId === 'ollama' && availableModels.length ? 'Installed Models' : 'Available Models'}</h4>
                   {visibleModels.map((example) => (
                     <button key={example} type="button" onClick={() => setModel(example)}>
                       {example}
