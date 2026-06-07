@@ -56,6 +56,7 @@ function App() {
   const [isBusy, setIsBusy] = useState(false);
   const [pinnedModel, setPinnedModel] = useState(() => getSavedBool('wolfellama.pinnedModel', true));
   const [sendSystemPrompt, setSendSystemPrompt] = useState(() => getSavedBool('wolfellama.sendSystemPrompt', false));
+  const [ollamaTerminalMode, setOllamaTerminalMode] = useState(() => getSavedBool('wolfellama.ollamaTerminalMode', true));
 
   const selectedProvider = useMemo(
     () => providerOptions.find((provider) => provider.id === providerId) ?? providerOptions[0],
@@ -109,7 +110,8 @@ function App() {
     window.localStorage.setItem('wolfellama.memoryEnabled', String(memoryEnabled));
     window.localStorage.setItem('wolfellama.pinnedModel', String(pinnedModel));
     window.localStorage.setItem('wolfellama.sendSystemPrompt', String(sendSystemPrompt));
-  }, [cloudBaseUrl, memoryEnabled, maxTokens, model, ollamaBaseUrl, pinnedModel, profileId, providerId, sendSystemPrompt, temperature]);
+    window.localStorage.setItem('wolfellama.ollamaTerminalMode', String(ollamaTerminalMode));
+  }, [cloudBaseUrl, memoryEnabled, maxTokens, model, ollamaBaseUrl, ollamaTerminalMode, pinnedModel, profileId, providerId, sendSystemPrompt, temperature]);
 
   function buildProviderMessages(userText: string): ProviderChatMessage[] {
     const priorMessages = messages
@@ -176,12 +178,19 @@ function App() {
 
     try {
       if (providerId === 'ollama') {
-        const response = await ollamaProvider.sendChat({
-          model,
-          temperature,
-          maxOutputTokens: maxTokens,
-          messages: buildProviderMessages(trimmed),
-        });
+        const response = ollamaTerminalMode
+          ? await ollamaProvider.sendGenerate({
+              model,
+              prompt: trimmed,
+              temperature,
+              maxOutputTokens: maxTokens,
+            })
+          : await ollamaProvider.sendChat({
+              model,
+              temperature,
+              maxOutputTokens: maxTokens,
+              messages: buildProviderMessages(trimmed),
+            });
 
         setMessages((current) => [
           ...current,
@@ -224,6 +233,7 @@ function App() {
         {
           id: crypto.randomUUID(),
           role: 'assistant',
+          sendToModel: false,
           content: `Provider error: ${error instanceof Error ? error.message : 'Unknown error'}`,
         },
       ]);
@@ -413,7 +423,7 @@ function App() {
                   <input value={ollamaBaseUrl} onChange={(event) => setOllamaBaseUrl(event.target.value)} />
                 </label>
                 <p>
-                  Built-in local provider. Run Ollama on this machine, pull a model, then click Connect Ollama.
+                  Terminal Mode uses Ollama generate format. Turn it off only if you want structured chat-role behavior.
                 </p>
               </section>
             ) : (
@@ -481,12 +491,24 @@ function App() {
                   />
                 </label>
 
+                {providerId === 'ollama' && (
+                  <label className="toggle-row">
+                    Terminal Mode
+                    <input
+                      type="checkbox"
+                      checked={ollamaTerminalMode}
+                      onChange={(event) => setOllamaTerminalMode(event.target.checked)}
+                    />
+                  </label>
+                )}
+
                 <label className="toggle-row">
                   Send profile prompt
                   <input
                     type="checkbox"
                     checked={sendSystemPrompt}
                     onChange={(event) => setSendSystemPrompt(event.target.checked)}
+                    disabled={providerId === 'ollama' && ollamaTerminalMode}
                   />
                 </label>
 
@@ -524,8 +546,14 @@ function App() {
                 </label>
 
                 <div className="profile-preview">
-                  <h4>Profile Prompt</h4>
-                  <p>{sendSystemPrompt ? selectedProfile.systemPrompt : 'Off — model receives only real chat messages.'}</p>
+                  <h4>Prompt Mode</h4>
+                  <p>
+                    {providerId === 'ollama' && ollamaTerminalMode
+                      ? 'Terminal Mode — app sends only the current typed prompt through Ollama generate.'
+                      : sendSystemPrompt
+                        ? selectedProfile.systemPrompt
+                        : 'Profile prompt off — model receives chat messages without an added system prompt.'}
+                  </p>
                 </div>
 
                 <div className="provider-preview">
