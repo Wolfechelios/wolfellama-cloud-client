@@ -1,4 +1,5 @@
 export type ProviderId =
+  | 'ollama'
   | 'openai'
   | 'anthropic'
   | 'gemini'
