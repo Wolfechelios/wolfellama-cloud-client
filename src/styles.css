@@ -30,6 +30,11 @@ button {
   cursor: pointer;
 }
 
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
 .app-shell {
   display: grid;
   grid-template-columns: 290px 1fr;
@@ -78,7 +83,8 @@ p {
 .eyebrow,
 .chat-header p,
 .profile-preview p,
-.hardware-hero p {
+.hardware-hero p,
+.local-provider-card p {
   color: #96a7bb;
 }
 
@@ -143,7 +149,8 @@ p {
 .control-grid,
 .chat-card,
 .settings-card,
-.hardware-panel {
+.hardware-panel,
+.local-provider-card {
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 26px;
   background: rgba(8, 12, 24, 0.72);
@@ -180,6 +187,14 @@ p {
 .control-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  padding: 16px;
+}
+
+.local-provider-card {
+  display: grid;
+  grid-template-columns: minmax(240px, 420px) 1fr;
+  align-items: end;
   gap: 14px;
   padding: 16px;
 }
@@ -347,7 +362,8 @@ textarea:focus {
   .app-shell,
   .workspace,
   .control-grid,
-  .hardware-grid {
+  .hardware-grid,
+  .local-provider-card {
     grid-template-columns: 1fr;
   }
 
