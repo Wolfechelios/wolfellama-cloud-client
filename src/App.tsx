@@ -16,6 +16,8 @@ interface ChatMessage {
   sendToModel?: boolean;
 }
 
+const MEMORY_MESSAGES_KEY = 'wolfellama.messages';
+
 const starterMessages: ChatMessage[] = [
   {
     id: 'welcome',
@@ -38,6 +40,29 @@ function getSavedBool(key: string, fallback: boolean) {
   return value === 'true';
 }
 
+function getSavedMessages() {
+  if (typeof window === 'undefined') return starterMessages;
+
+  try {
+    const raw = window.localStorage.getItem(MEMORY_MESSAGES_KEY);
+    if (!raw) return starterMessages;
+
+    const parsed = JSON.parse(raw) as ChatMessage[];
+    if (!Array.isArray(parsed) || parsed.length === 0) return starterMessages;
+
+    return parsed.filter((message) => {
+      return (
+        message &&
+        typeof message.id === 'string' &&
+        (message.role === 'user' || message.role === 'assistant') &&
+        typeof message.content === 'string'
+      );
+    });
+  } catch {
+    return starterMessages;
+  }
+}
+
 function App() {
   const [activeView, setActiveView] = useState<ActiveView>('chat');
   const [providerId, setProviderId] = useState(() => getSavedText('wolfellama.providerId', 'ollama'));
@@ -48,7 +73,7 @@ function App() {
   const [cloudApiKey, setCloudApiKey] = useState('');
   const [statusLabel, setStatusLabel] = useState('Selected');
   const [input, setInput] = useState('');
-  const [messages, setMessages] = useState<ChatMessage[]>(starterMessages);
+  const [messages, setMessages] = useState<ChatMessage[]>(getSavedMessages);
   const [temperature, setTemperature] = useState(() => Number(getSavedText('wolfellama.temperature', '0.7')));
   const [maxTokens, setMaxTokens] = useState(() => Number(getSavedText('wolfellama.maxTokens', '1200')));
   const [memoryEnabled, setMemoryEnabled] = useState(() => getSavedBool('wolfellama.memoryEnabled', true));
@@ -111,19 +136,39 @@ function App() {
   }, [cloudBaseUrl, memoryEnabled, maxTokens, model, ollamaBaseUrl, ollamaTerminalMode, pinnedModel, profileId, providerId, sendSystemPrompt, temperature]);
 
   useEffect(() => {
+    if (memoryEnabled) {
+      window.localStorage.setItem(MEMORY_MESSAGES_KEY, JSON.stringify(messages));
+    }
+  }, [memoryEnabled, messages]);
+
+  useEffect(() => {
     if (profileId === 'terminal') {
       setSendSystemPrompt(false);
       setOllamaTerminalMode(true);
     }
   }, [profileId]);
 
+  function getModelVisibleHistory() {
+    if (!memoryEnabled) return [];
+    return messages.filter((message) => message.sendToModel !== false);
+  }
+
+  function buildTerminalPrompt(userText: string) {
+    const history = getModelVisibleHistory();
+    if (!history.length) return userText;
+
+    const priorTurns = history
+      .map((message) => `${message.role === 'user' ? 'User' : 'Assistant'}: ${message.content}`)
+      .join('\n\n');
+
+    return `${priorTurns}\n\nUser: ${userText}\nAssistant:`;
+  }
+
   function buildProviderMessages(userText: string): ProviderChatMessage[] {
-    const priorMessages = messages
-      .filter((message) => message.sendToModel !== false)
-      .map((message) => ({
-        role: message.role,
-        content: message.content,
-      }));
+    const priorMessages = getModelVisibleHistory().map((message) => ({
+      role: message.role,
+      content: message.content,
+    }));
 
     const outboundMessages: ProviderChatMessage[] = [];
 
@@ -164,6 +209,18 @@ function App() {
     setStatusLabel('Selected');
   }
 
+  function handleNewChat() {
+    setMessages(starterMessages);
+    window.localStorage.removeItem(MEMORY_MESSAGES_KEY);
+    setStatusLabel('New chat');
+  }
+
+  function handleClearMemory() {
+    setMessages(starterMessages);
+    window.localStorage.removeItem(MEMORY_MESSAGES_KEY);
+    setStatusLabel('Memory cleared');
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const trimmed = input.trim();
@@ -184,7 +241,7 @@ function App() {
         const response = effectiveTerminalMode
           ? await ollamaProvider.sendGenerate({
               model,
-              prompt: trimmed,
+              prompt: buildTerminalPrompt(trimmed),
               temperature,
               maxOutputTokens: maxTokens,
             })
@@ -335,7 +392,7 @@ function App() {
           </div>
         </div>
 
-        <button className="new-chat-button" type="button" onClick={() => setMessages(starterMessages)}>
+        <button className="new-chat-button" type="button" onClick={handleNewChat}>
           + New Chat
         </button>
 
@@ -358,8 +415,8 @@ function App() {
           <button className="history-item" type="button">
             Provider Setup
           </button>
-          <button className="history-item" type="button">
-            Local Memory
+          <button className="history-item" type="button" onClick={handleClearMemory}>
+            Clear Memory
           </button>
         </section>
 
@@ -367,6 +424,7 @@ function App() {
           <h2>Live Now</h2>
           <span>Ollama local</span>
           <span>Terminal Mode</span>
+          <span>Persistent local memory</span>
           <span>OpenAI-compatible cloud</span>
           <span>Chameleon hardware</span>
         </section>
@@ -430,7 +488,7 @@ function App() {
                   <input value={ollamaBaseUrl} onChange={(event) => setOllamaBaseUrl(event.target.value)} />
                 </label>
                 <p>
-                  Active: {model} • {effectiveTerminalMode ? 'Terminal Mode' : 'Chat Mode'} • Prompt Layer {promptLayerOn ? 'On' : 'Off'}
+                  Active: {model} • {effectiveTerminalMode ? 'Terminal Mode' : 'Chat Mode'} • Prompt Layer {promptLayerOn ? 'On' : 'Off'} • Memory {memoryEnabled ? 'On' : 'Off'}
                 </p>
               </section>
             ) : (
@@ -448,7 +506,7 @@ function App() {
                   Base URL
                   <input value={activeBaseUrl} onChange={(event) => setCloudBaseUrl(event.target.value)} />
                 </label>
-                <p>Active: {model} • {selectedProvider.name}</p>
+                <p>Active: {model} • {selectedProvider.name} • Memory {memoryEnabled ? 'On' : 'Off'}</p>
               </section>
             )}
 
@@ -459,8 +517,8 @@ function App() {
                     <h3>Chat</h3>
                     <p>{selectedProvider.description}</p>
                   </div>
-                  <button type="button" className="ghost-button">
-                    Export
+                  <button type="button" className="ghost-button" onClick={handleClearMemory}>
+                    Clear Memory
                   </button>
                 </div>
 
@@ -552,7 +610,7 @@ function App() {
                   <h4>Prompt Mode</h4>
                   <p>
                     {effectiveTerminalMode
-                      ? 'Terminal Mode — sends only the current prompt through the cleanest local path available.'
+                      ? `Terminal Mode — ${memoryEnabled ? 'keeps prior turns in local memory.' : 'sends only the current prompt.'}`
                       : promptLayerOn
                         ? selectedProfile.systemPrompt
                         : 'Profile prompt off — model receives chat messages without an added system prompt.'}
