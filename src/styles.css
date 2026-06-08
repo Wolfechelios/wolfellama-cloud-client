@@ -38,7 +38,7 @@ h1, h2, h3, h4, p { margin: 0; }
 .muted-list span { color: #6f7e91; font-size: .9rem; }
 
 .main-panel { display: flex; flex-direction: column; gap: 18px; padding: 24px; }
-.topbar, .control-grid, .chat-card, .settings-card, .hardware-panel, .local-provider-card, .agent-panel, .repo-runner-panel { border: 1px solid rgba(255,255,255,.08); border-radius: 26px; background: rgba(8,12,24,.72); box-shadow: 0 22px 80px rgba(0,0,0,.28); }
+.topbar, .control-grid, .chat-card, .settings-card, .hardware-panel, .local-provider-card, .agent-panel, .repo-runner-panel, .builder-panel { border: 1px solid rgba(255,255,255,.08); border-radius: 26px; background: rgba(8,12,24,.72); box-shadow: 0 22px 80px rgba(0,0,0,.28); }
 .topbar { display: flex; justify-content: space-between; align-items: center; padding: 22px; }
 .topbar h2 { font-size: 1.8rem; }
 .eyebrow { margin-bottom: 5px; font-size: .78rem; letter-spacing: .16em; text-transform: uppercase; }
@@ -49,7 +49,7 @@ label { display: grid; gap: 8px; color: #aebdd0; font-size: .86rem; }
 input, select, textarea { width: 100%; border: 1px solid rgba(255,255,255,.09); border-radius: 14px; background: rgba(255,255,255,.055); color: #f5fbff; padding: 11px 12px; outline: none; }
 input:focus, select:focus, textarea:focus { border-color: rgba(65,190,255,.65); box-shadow: 0 0 0 3px rgba(65,190,255,.12); }
 .workspace { display: grid; grid-template-columns: 1fr 340px; gap: 18px; min-height: 0; }
-.chat-card, .settings-card, .hardware-panel, .agent-panel, .repo-runner-panel { padding: 18px; }
+.chat-card, .settings-card, .hardware-panel, .agent-panel, .repo-runner-panel, .builder-panel { padding: 18px; }
 .chat-card { display: flex; flex-direction: column; min-height: 620px; }
 .chat-header, .hardware-hero, .agent-hero { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; padding-bottom: 16px; }
 .message-list { display: flex; flex: 1; flex-direction: column; gap: 14px; overflow: auto; padding: 8px 4px 18px; }
@@ -64,7 +64,7 @@ input:focus, select:focus, textarea:focus { border-color: rgba(65,190,255,.65); 
 .toggle-row input { width: auto; }
 .profile-preview, .provider-preview { display: grid; gap: 10px; border-top: 1px solid rgba(255,255,255,.08); padding-top: 16px; }
 .provider-preview button { text-align: center; }
-.hardware-panel, .agent-panel, .repo-runner-panel { display: grid; gap: 18px; }
+.hardware-panel, .agent-panel, .repo-runner-panel, .builder-panel { display: grid; gap: 18px; }
 .hardware-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .hardware-actions { display: flex; flex-wrap: wrap; gap: 12px; }
 .hardware-status, .agent-context-card, .agent-progress { border: 1px solid rgba(65,190,255,.18); border-radius: 16px; background: rgba(65,190,255,.08); color: #b9e5ff; padding: 14px; }
@@ -95,7 +95,18 @@ input:focus, select:focus, textarea:focus { border-color: rgba(65,190,255,.65); 
 .repo-log-card article { display: grid; gap: 6px; border-top: 1px solid rgba(255,255,255,.08); padding-top: 10px; }
 .repo-log-card code { color: #f5fbff; white-space: pre-wrap; overflow-wrap: anywhere; }
 
+.builder-goal-card, .builder-empty-card, .builder-task-card, .builder-plan-card { border: 1px solid rgba(255,255,255,.08); border-radius: 18px; background: rgba(255,255,255,.04); padding: 16px; }
+.builder-goal-card, .builder-task-card, .builder-plan-card { display: grid; gap: 14px; }
+.builder-goal-card textarea, .builder-task-card textarea { min-height: 120px; resize: vertical; }
+.builder-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+.builder-plan-card ol { display: grid; gap: 10px; margin: 0; padding-left: 20px; color: #cfe8ff; }
+.builder-changes-card { grid-column: 1 / -1; }
+.builder-changes-card article { display: grid; gap: 12px; border-top: 1px solid rgba(255,255,255,.08); padding-top: 14px; }
+.builder-changes-card pre { max-height: 320px; overflow: auto; border: 1px solid rgba(65,190,255,.18); border-radius: 14px; background: rgba(0,0,0,.24); color: #f5fbff; padding: 12px; white-space: pre-wrap; }
+.builder-task-card p, .builder-empty-card p { color: #96a7bb; }
+
 @media (max-width: 1100px) {
-  .app-shell, .workspace, .control-grid, .hardware-grid, .local-provider-card, .repo-runner-url-row, .repo-runner-layout, .repo-facts-grid, .repo-env-row { grid-template-columns: 1fr; }
+  .app-shell, .workspace, .control-grid, .hardware-grid, .local-provider-card, .repo-runner-url-row, .repo-runner-layout, .repo-facts-grid, .repo-env-row, .builder-layout { grid-template-columns: 1fr; }
+  .builder-changes-card { grid-column: auto; }
   .sidebar { display: none; }
 }
