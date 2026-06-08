@@ -28,11 +28,3 @@ export interface DesktopRepoRunnerApi {
   saveEnv(localPath: string, fields: EnvField[]): Promise<{ logs: string[] }>;
   openPreview(previewUrl: string): Promise<void>;
 }
-
-declare global {
-  interface Window {
-    repoRunner?: DesktopRepoRunnerApi;
-  }
-}
-
-export {};
