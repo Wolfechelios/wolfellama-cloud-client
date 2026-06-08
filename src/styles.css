@@ -84,7 +84,8 @@ p {
 .chat-header p,
 .profile-preview p,
 .hardware-hero p,
-.local-provider-card p {
+.local-provider-card p,
+.agent-hero p {
   color: #96a7bb;
 }
 
@@ -151,7 +152,7 @@ p {
 .settings-card,
 .hardware-panel,
 .local-provider-card,
-.active-model-card {
+.agent-panel {
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 26px;
   background: rgba(8, 12, 24, 0.72);
@@ -185,45 +186,9 @@ p {
   padding: 10px 14px;
 }
 
-.active-model-card {
-  display: grid;
-  grid-template-columns: minmax(260px, 1fr) 2fr;
-  gap: 18px;
-  padding: 18px;
-}
-
-.active-model-card h3 {
-  font-size: 1.25rem;
-  word-break: break-word;
-}
-
-.active-model-card dl {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-  margin: 0;
-}
-
-.active-model-card div {
-  min-width: 0;
-}
-
-.active-model-card dt {
-  color: #7c8ba0;
-  font-size: 0.72rem;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-
-.active-model-card dd {
-  margin: 5px 0 0;
-  color: #dfeeff;
-  overflow-wrap: anywhere;
-}
-
 .control-grid {
   display: grid;
-  grid-template-columns: 1.4fr 1fr 1fr 1fr auto;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 14px;
   padding: 16px;
 }
@@ -271,7 +236,8 @@ textarea:focus {
 
 .chat-card,
 .settings-card,
-.hardware-panel {
+.hardware-panel,
+.agent-panel {
   padding: 18px;
 }
 
@@ -282,7 +248,8 @@ textarea:focus {
 }
 
 .chat-header,
-.hardware-hero {
+.hardware-hero,
+.agent-hero {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
@@ -365,7 +332,8 @@ textarea:focus {
   text-align: center;
 }
 
-.hardware-panel {
+.hardware-panel,
+.agent-panel {
   display: grid;
   gap: 18px;
 }
@@ -382,7 +350,9 @@ textarea:focus {
   gap: 12px;
 }
 
-.hardware-status {
+.hardware-status,
+.agent-context-card,
+.agent-progress {
   border: 1px solid rgba(65, 190, 255, 0.18);
   border-radius: 16px;
   background: rgba(65, 190, 255, 0.08);
@@ -395,14 +365,62 @@ textarea:focus {
   resize: vertical;
 }
 
+.agent-panel textarea {
+  min-height: 120px;
+  resize: vertical;
+}
+
+.agent-task-card,
+.agent-log-card {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.04);
+  padding: 16px;
+}
+
+.agent-task-card ol {
+  display: grid;
+  gap: 10px;
+  margin: 14px 0 0;
+  padding-left: 22px;
+}
+
+.agent-step {
+  border-left: 3px solid rgba(255, 255, 255, 0.18);
+  padding-left: 10px;
+}
+
+.agent-step.complete {
+  border-left-color: rgba(65, 190, 255, 0.85);
+}
+
+.agent-step.blocked,
+.agent-step.failed {
+  border-left-color: rgba(255, 150, 60, 0.85);
+}
+
+.agent-step p,
+.agent-step small,
+.agent-log-card p {
+  color: #96a7bb;
+}
+
+.agent-log-card {
+  display: grid;
+  gap: 8px;
+}
+
+.agent-log-card span {
+  color: #85cfff;
+  font-size: 0.78rem;
+}
+
 @media (max-width: 1100px) {
   .app-shell,
   .workspace,
   .control-grid,
   .hardware-grid,
-  .local-provider-card,
-  .active-model-card,
-  .active-model-card dl {
+  .local-provider-card {
     grid-template-columns: 1fr;
   }
 
