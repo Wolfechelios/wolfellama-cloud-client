@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { ChameleonGuiPanel } from './components/hardware/ChameleonGuiPanel';
+import { savedModelCatalog } from './data/modelCatalog';
 import { agentProfiles } from './data/profiles';
 import { providerOptions } from './data/providers';
 import { OllamaProvider } from './providers/ollama';
@@ -8,6 +9,7 @@ import type { ChatMessage as ProviderChatMessage } from './providers/types';
 
 type MessageRole = 'user' | 'assistant';
 type ActiveView = 'chat' | 'hardware';
+type ModelStatus = 'Selected' | 'Checking' | 'Ready' | 'Loaded locally' | 'Needs API key' | 'Provider unavailable' | 'Model not found' | 'Endpoint error' | 'Provider rejected model ID';
 
 interface ChatMessage {
   id: string;
@@ -16,13 +18,15 @@ interface ChatMessage {
   sendToModel?: boolean;
 }
 
+const APP_LANGUAGE = 'English';
+
 const starterMessages: ChatMessage[] = [
   {
     id: 'welcome',
     role: 'assistant',
     sendToModel: false,
     content:
-      'WolfeLlama Cloud Client is ready. This welcome message is UI-only and is not sent to your model.',
+      'WolfeLlama Cloud Client is ready. Select any saved local, cloud, or manual model. This welcome message is UI-only and is not sent to your model.',
   },
 ];
 
@@ -41,12 +45,12 @@ function getSavedBool(key: string, fallback: boolean) {
 function App() {
   const [activeView, setActiveView] = useState<ActiveView>('chat');
   const [providerId, setProviderId] = useState(() => getSavedText('wolfellama.providerId', 'ollama'));
-  const [profileId, setProfileId] = useState(() => getSavedText('wolfellama.profileId', 'general'));
-  const [model, setModel] = useState(() => getSavedText('wolfellama.model', 'llama3.1'));
+  const [profileId, setProfileId] = useState(() => getSavedText('wolfellama.profileId', 'terminal'));
+  const [model, setModel] = useState(() => getSavedText('wolfellama.model', 'reefer/monica:latest'));
   const [ollamaBaseUrl, setOllamaBaseUrl] = useState(() => getSavedText('wolfellama.ollamaBaseUrl', 'http://127.0.0.1:11434'));
   const [cloudBaseUrl, setCloudBaseUrl] = useState(() => getSavedText('wolfellama.cloudBaseUrl', ''));
   const [cloudApiKey, setCloudApiKey] = useState('');
-  const [apiKeyLabel, setApiKeyLabel] = useState('Ollama local');
+  const [apiKeyLabel, setApiKeyLabel] = useState('Selected');
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>(starterMessages);
   const [temperature, setTemperature] = useState(() => Number(getSavedText('wolfellama.temperature', '0.7')));
@@ -57,28 +61,54 @@ function App() {
   const [pinnedModel, setPinnedModel] = useState(() => getSavedBool('wolfellama.pinnedModel', true));
   const [sendSystemPrompt, setSendSystemPrompt] = useState(() => getSavedBool('wolfellama.sendSystemPrompt', false));
   const [ollamaTerminalMode, setOllamaTerminalMode] = useState(() => getSavedBool('wolfellama.ollamaTerminalMode', true));
+  const [modelStatus, setModelStatus] = useState<ModelStatus>('Selected');
 
   const selectedProvider = useMemo(
     () => providerOptions.find((provider) => provider.id === providerId) ?? providerOptions[0],
     [providerId],
   );
 
-  const visibleModels = useMemo(() => {
-    if (providerId === 'ollama' && availableModels.length) {
-      return availableModels;
-    }
-
-    if (providerId !== 'ollama' && availableModels.length) {
-      return availableModels;
-    }
-
-    return selectedProvider.modelExamples;
-  }, [availableModels, providerId, selectedProvider.modelExamples]);
-
   const selectedProfile = useMemo(
     () => agentProfiles.find((profile) => profile.id === profileId) ?? agentProfiles[0],
     [profileId],
   );
+
+  const activeBaseUrl = providerId === 'ollama' ? ollamaBaseUrl : cloudBaseUrl || selectedProvider.baseUrlHint || '';
+  const effectiveTerminalMode = profileId === 'terminal' || (providerId === 'ollama' && ollamaTerminalMode);
+  const promptLayerLabel = sendSystemPrompt && !effectiveTerminalMode ? 'On' : 'Off';
+
+  const unifiedModelOptions = useMemo(() => {
+    const detectedLocal = availableModels.map((modelName) => ({
+      source: 'local-ollama' as const,
+      providerId: 'ollama',
+      label: `Ollama installed: ${modelName}`,
+      modelId: modelName,
+      baseUrl: ollamaBaseUrl,
+      requiresApiKey: false,
+      statusHint: 'Loaded locally',
+    }));
+
+    const providerDefaults = selectedProvider.modelExamples.map((modelName) => ({
+      source: providerId === 'ollama' ? ('local-ollama' as const) : ('custom' as const),
+      providerId,
+      label: `${selectedProvider.name}: ${modelName}`,
+      modelId: modelName,
+      baseUrl: activeBaseUrl,
+      requiresApiKey: providerId !== 'ollama',
+      statusHint: providerId === 'ollama' ? 'Check local Ollama' : 'API key required',
+    }));
+
+    const merged = [...detectedLocal, ...savedModelCatalog, ...providerDefaults];
+    const seen = new Set<string>();
+    return merged.filter((item) => {
+      const key = `${item.providerId}:${item.modelId}:${item.baseUrl ?? ''}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [activeBaseUrl, availableModels, ollamaBaseUrl, providerId, selectedProvider]);
+
+  const selectedModelKey = `${providerId}::${model}::${activeBaseUrl}`;
 
   const ollamaProvider = useMemo(() => new OllamaProvider(ollamaBaseUrl), [ollamaBaseUrl]);
 
@@ -88,7 +118,7 @@ function App() {
     return new OpenAICompatibleProvider({
       id: selectedProvider.id,
       name: selectedProvider.name,
-      baseUrl: cloudBaseUrl || selectedProvider.baseUrlHint || '',
+      baseUrl: activeBaseUrl,
       apiKey: cloudApiKey,
       defaultModels: selectedProvider.modelExamples.map((name) => ({
         id: name,
@@ -97,7 +127,7 @@ function App() {
         supportsStreaming: false,
       })),
     });
-  }, [cloudApiKey, cloudBaseUrl, providerId, selectedProvider]);
+  }, [activeBaseUrl, cloudApiKey, providerId, selectedProvider]);
 
   useEffect(() => {
     window.localStorage.setItem('wolfellama.providerId', providerId);
@@ -113,6 +143,13 @@ function App() {
     window.localStorage.setItem('wolfellama.ollamaTerminalMode', String(ollamaTerminalMode));
   }, [cloudBaseUrl, memoryEnabled, maxTokens, model, ollamaBaseUrl, ollamaTerminalMode, pinnedModel, profileId, providerId, sendSystemPrompt, temperature]);
 
+  useEffect(() => {
+    if (profileId === 'terminal') {
+      setSendSystemPrompt(false);
+      setOllamaTerminalMode(true);
+    }
+  }, [profileId]);
+
   function buildProviderMessages(userText: string): ProviderChatMessage[] {
     const priorMessages = messages
       .filter((message) => message.sendToModel !== false)
@@ -123,7 +160,7 @@ function App() {
 
     const outboundMessages: ProviderChatMessage[] = [];
 
-    if (sendSystemPrompt && selectedProfile.systemPrompt.trim()) {
+    if (sendSystemPrompt && !effectiveTerminalMode && selectedProfile.systemPrompt.trim()) {
       outboundMessages.push({
         role: 'system',
         content: selectedProfile.systemPrompt,
@@ -143,22 +180,46 @@ function App() {
     const nextProvider = providerOptions.find((provider) => provider.id === nextProviderId) ?? providerOptions[0];
     setProviderId(nextProviderId);
     setAvailableModels([]);
+    setModelStatus(nextProviderId === 'ollama' ? 'Selected' : 'Needs API key');
     if (!pinnedModel) {
       setModel(nextProvider.modelExamples[0] ?? 'select-model');
     }
 
     if (nextProviderId === 'ollama') {
-      setApiKeyLabel('Ollama local');
+      setApiKeyLabel('Selected');
       return;
     }
 
     setCloudBaseUrl(nextProvider.baseUrlHint ?? '');
-    setApiKeyLabel(nextProvider.openAICompatible ? `${nextProvider.name} ready for API key` : `${nextProvider.name} native adapter pending`);
+    setApiKeyLabel(nextProvider.openAICompatible ? 'Needs API key' : 'Provider unavailable');
   }
 
   function handleModelChange(nextModel: string) {
     setModel(nextModel);
     setPinnedModel(true);
+    setModelStatus(providerId === 'ollama' ? 'Selected' : cloudApiKey.trim() ? 'Selected' : 'Needs API key');
+  }
+
+  function handleUnifiedModelSelect(value: string) {
+    const item = unifiedModelOptions.find((option) => `${option.providerId}::${option.modelId}::${option.baseUrl ?? ''}` === value);
+    if (!item) return;
+
+    const provider = providerOptions.find((option) => option.id === item.providerId) ?? selectedProvider;
+    setProviderId(item.providerId);
+    setModel(item.modelId);
+    setPinnedModel(true);
+    setAvailableModels([]);
+
+    if (item.providerId === 'ollama') {
+      setOllamaBaseUrl(item.baseUrl ?? 'http://127.0.0.1:11434');
+      setModelStatus('Selected');
+      setApiKeyLabel('Selected');
+      return;
+    }
+
+    setCloudBaseUrl(item.baseUrl ?? provider.baseUrlHint ?? '');
+    setModelStatus(item.requiresApiKey && !cloudApiKey.trim() ? 'Needs API key' : 'Selected');
+    setApiKeyLabel(item.requiresApiKey && !cloudApiKey.trim() ? 'Needs API key' : 'Selected');
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -178,7 +239,7 @@ function App() {
 
     try {
       if (providerId === 'ollama') {
-        const response = ollamaTerminalMode
+        const response = effectiveTerminalMode
           ? await ollamaProvider.sendGenerate({
               model,
               prompt: trimmed,
@@ -192,6 +253,8 @@ function App() {
               messages: buildProviderMessages(trimmed),
             });
 
+        setModelStatus('Ready');
+        setApiKeyLabel('Ready');
         setMessages((current) => [
           ...current,
           {
@@ -208,6 +271,8 @@ function App() {
           messages: buildProviderMessages(trimmed),
         });
 
+        setModelStatus('Ready');
+        setApiKeyLabel('Ready');
         setMessages((current) => [
           ...current,
           {
@@ -217,17 +282,20 @@ function App() {
           },
         ]);
       } else {
+        setModelStatus('Provider unavailable');
         setMessages((current) => [
           ...current,
           {
             id: crypto.randomUUID(),
             role: 'assistant',
+            sendToModel: false,
             content:
-              `${selectedProvider.name} is visible, but it needs a native adapter. Use OpenAI, OpenRouter, Groq, Mistral, Together, Perplexity, or Custom for live cloud chat right now.`,
+              `${selectedProvider.name} needs a different adapter. Use an OpenAI-compatible provider or Custom Endpoint for live cloud chat right now.`,
           },
         ]);
       }
     } catch (error) {
+      setModelStatus(providerId === 'ollama' ? 'Endpoint error' : 'Provider rejected model ID');
       setMessages((current) => [
         ...current,
         {
@@ -250,18 +318,21 @@ function App() {
   async function handleConnectProvider() {
     if (providerId !== 'ollama') {
       if (!selectedProvider.openAICompatible || !cloudProvider) {
-        setApiKeyLabel(`${selectedProvider.name} native adapter pending`);
+        setApiKeyLabel('Provider unavailable');
+        setModelStatus('Provider unavailable');
         setAvailableModels(selectedProvider.modelExamples);
         return;
       }
 
       if (!cloudApiKey.trim()) {
-        setApiKeyLabel(`${selectedProvider.name} needs API key`);
+        setApiKeyLabel('Needs API key');
+        setModelStatus('Needs API key');
         setAvailableModels(selectedProvider.modelExamples);
         return;
       }
 
       setIsBusy(true);
+      setModelStatus('Checking');
       try {
         const models = await cloudProvider.listModels();
         const names = models.map((item) => item.name);
@@ -270,10 +341,12 @@ function App() {
         if (!pinnedModel) {
           setModel(nextModels[0] ?? model);
         }
-        setApiKeyLabel(`${selectedProvider.name} connected • ${nextModels.length} models`);
+        setApiKeyLabel('Ready');
+        setModelStatus('Ready');
       } catch (error) {
         setAvailableModels(selectedProvider.modelExamples);
-        setApiKeyLabel(`${selectedProvider.name} model fetch failed`);
+        setApiKeyLabel('Endpoint error');
+        setModelStatus('Endpoint error');
         setMessages((current) => [
           ...current,
           {
@@ -291,16 +364,20 @@ function App() {
     }
 
     setIsBusy(true);
+    setModelStatus('Checking');
     try {
       const models = await ollamaProvider.listModels();
       const names = models.map((item) => item.name);
       setAvailableModels(names);
-      setApiKeyLabel(names.length ? `Ollama connected • ${names.length} models` : 'Ollama connected • no models found');
+      const selectedExists = names.includes(model);
+      setApiKeyLabel(selectedExists ? 'Loaded locally' : 'Model not found');
+      setModelStatus(selectedExists ? 'Loaded locally' : 'Model not found');
       if (names.length && !pinnedModel) {
         setModel(names[0]);
       }
     } catch (error) {
-      setApiKeyLabel('Ollama not reachable');
+      setApiKeyLabel('Provider unavailable');
+      setModelStatus('Provider unavailable');
       setMessages((current) => [
         ...current,
         {
@@ -317,7 +394,7 @@ function App() {
   }
 
   return (
-    <main className="app-shell">
+    <main className="app-shell" lang="en">
       <aside className="sidebar">
         <div className="brand-block">
           <div className="brand-mark">WL</div>
@@ -356,12 +433,11 @@ function App() {
         </section>
 
         <section className="sidebar-section muted-list">
-          <h2>Live Now</h2>
-          <span>Ollama local</span>
-          <span>OpenAI-compatible cloud</span>
-          <span>OpenRouter</span>
-          <span>Groq / Mistral / Together</span>
-          <span>Perplexity / Custom</span>
+          <h2>English UI</h2>
+          <span>Interface language: {APP_LANGUAGE}</span>
+          <span>Terminal Mode profile</span>
+          <span>Unified model picker</span>
+          <span>Active model status</span>
         </section>
       </aside>
 
@@ -371,14 +447,40 @@ function App() {
             <p className="eyebrow">Private AI console</p>
             <h2>{activeView === 'hardware' ? 'Hardware' : selectedProfile.name}</h2>
           </div>
-          <div className="status-pill">{activeView === 'hardware' ? 'Chameleon companion' : apiKeyLabel}</div>
+          <div className="status-pill">{activeView === 'hardware' ? 'Chameleon companion' : modelStatus}</div>
         </header>
 
         {activeView === 'hardware' ? (
           <ChameleonGuiPanel onSendToChat={sendHardwareOutputToChat} />
         ) : (
           <>
+            <section className="active-model-card">
+              <div>
+                <p className="eyebrow">Active Model</p>
+                <h3>{model}</h3>
+              </div>
+              <dl>
+                <div><dt>Provider</dt><dd>{selectedProvider.name}</dd></div>
+                <div><dt>Status</dt><dd>{modelStatus}</dd></div>
+                <div><dt>Mode</dt><dd>{effectiveTerminalMode ? 'Terminal Mode' : selectedProfile.name}</dd></div>
+                <div><dt>Endpoint</dt><dd>{activeBaseUrl || 'Not set'}</dd></div>
+                <div><dt>Prompt Layer</dt><dd>{promptLayerLabel}</dd></div>
+                <div><dt>Pinned</dt><dd>{pinnedModel ? 'On' : 'Off'}</dd></div>
+              </dl>
+            </section>
+
             <section className="control-grid">
+              <label>
+                Model Source
+                <select value={selectedModelKey} onChange={(event) => handleUnifiedModelSelect(event.target.value)}>
+                  {unifiedModelOptions.map((option) => (
+                    <option key={`${option.providerId}::${option.modelId}::${option.baseUrl ?? ''}`} value={`${option.providerId}::${option.modelId}::${option.baseUrl ?? ''}`}>
+                      {option.label} — {option.statusHint}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
               <label>
                 Provider
                 <select value={providerId} onChange={(event) => handleProviderChange(event.target.value)}>
@@ -402,17 +504,17 @@ function App() {
               </label>
 
               <label>
-                Model
+                Model ID
                 <input list="available-models" value={model} onChange={(event) => handleModelChange(event.target.value)} />
                 <datalist id="available-models">
-                  {visibleModels.map((visibleModel) => (
-                    <option key={visibleModel} value={visibleModel} />
+                  {unifiedModelOptions.map((option) => (
+                    <option key={`${option.providerId}-${option.modelId}`} value={option.modelId} />
                   ))}
                 </datalist>
               </label>
 
               <button className="connect-button" type="button" onClick={handleConnectProvider} disabled={isBusy}>
-                {isBusy ? 'Working...' : providerId === 'ollama' ? 'Connect Ollama' : 'Connect Cloud'}
+                {isBusy ? 'Checking...' : providerId === 'ollama' ? 'Check Local Model' : 'Check Cloud Model'}
               </button>
             </section>
 
@@ -423,7 +525,7 @@ function App() {
                   <input value={ollamaBaseUrl} onChange={(event) => setOllamaBaseUrl(event.target.value)} />
                 </label>
                 <p>
-                  Terminal Mode uses Ollama generate format. Turn it off only if you want structured chat-role behavior.
+                  Terminal Mode uses Ollama generate format. Select any saved or installed local model before checking availability.
                 </p>
               </section>
             ) : (
@@ -433,7 +535,10 @@ function App() {
                   <input
                     type="password"
                     value={cloudApiKey}
-                    onChange={(event) => setCloudApiKey(event.target.value)}
+                    onChange={(event) => {
+                      setCloudApiKey(event.target.value);
+                      setModelStatus(event.target.value.trim() ? 'Selected' : 'Needs API key');
+                    }}
                     placeholder="Paste provider API key"
                   />
                 </label>
@@ -442,9 +547,7 @@ function App() {
                   <input value={cloudBaseUrl || selectedProvider.baseUrlHint || ''} onChange={(event) => setCloudBaseUrl(event.target.value)} />
                 </label>
                 <p>
-                  {selectedProvider.openAICompatible
-                    ? 'Live cloud chat is wired for this provider. Keys are currently session-only until OS keychain storage is connected.'
-                    : 'This provider needs a native adapter. Use OpenRouter as a bridge for this model family for now.'}
+                  Cloud models are selectable before connection. Checking confirms endpoint and account access.
                 </p>
               </section>
             )}
@@ -508,7 +611,7 @@ function App() {
                     type="checkbox"
                     checked={sendSystemPrompt}
                     onChange={(event) => setSendSystemPrompt(event.target.checked)}
-                    disabled={providerId === 'ollama' && ollamaTerminalMode}
+                    disabled={effectiveTerminalMode}
                   />
                 </label>
 
@@ -548,8 +651,8 @@ function App() {
                 <div className="profile-preview">
                   <h4>Prompt Mode</h4>
                   <p>
-                    {providerId === 'ollama' && ollamaTerminalMode
-                      ? 'Terminal Mode — app sends only the current typed prompt through Ollama generate.'
+                    {effectiveTerminalMode
+                      ? 'Terminal Mode — the app sends the cleanest available prompt format for the selected model source.'
                       : sendSystemPrompt
                         ? selectedProfile.systemPrompt
                         : 'Profile prompt off — model receives chat messages without an added system prompt.'}
@@ -557,10 +660,10 @@ function App() {
                 </div>
 
                 <div className="provider-preview">
-                  <h4>{providerId === 'ollama' && availableModels.length ? 'Installed Models' : 'Available Models'}</h4>
-                  {visibleModels.map((example) => (
-                    <button key={example} type="button" onClick={() => handleModelChange(example)}>
-                      {example}
+                  <h4>{providerId === 'ollama' && availableModels.length ? 'Installed Models' : 'Model Suggestions'}</h4>
+                  {unifiedModelOptions.map((option) => (
+                    <button key={`${option.providerId}-${option.modelId}-${option.label}`} type="button" onClick={() => handleUnifiedModelSelect(`${option.providerId}::${option.modelId}::${option.baseUrl ?? ''}`)}>
+                      {option.label}
                     </button>
                   ))}
                 </div>
