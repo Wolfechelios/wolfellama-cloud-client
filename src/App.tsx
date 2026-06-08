@@ -423,10 +423,10 @@ function App() {
         <section className="sidebar-section muted-list">
           <h2>Live Now</h2>
           <span>Paste GitHub URL</span>
+          <span>Builder model select</span>
           <span>Builder planning</span>
           <span>Draft file changes</span>
           <span>Project library</span>
-          <span>Plain-English logs</span>
           <span>AI error explanation</span>
         </section>
       </aside>
@@ -437,11 +437,11 @@ function App() {
             <p className="eyebrow">Private AI console</p>
             <h2>{activeView === 'builder' ? 'Builder Mode' : activeView === 'repoRunner' ? 'Repo Runner' : activeView === 'hardware' ? 'Hardware' : activeView === 'agent' ? 'Agent Mode' : selectedProfile.name}</h2>
           </div>
-          <div className="status-pill">{activeView === 'builder' ? 'AI build workspace' : activeView === 'repoRunner' ? 'GitHub app launcher' : activeView === 'hardware' ? 'Chameleon companion' : activeView === 'agent' ? 'Task workspace' : statusLabel}</div>
+          <div className="status-pill">{activeView === 'builder' ? `Builder: ${model}` : activeView === 'repoRunner' ? 'GitHub app launcher' : activeView === 'hardware' ? 'Chameleon companion' : activeView === 'agent' ? 'Task workspace' : statusLabel}</div>
         </header>
 
         {activeView === 'builder' ? (
-          <BuilderPanel onSendToChat={sendTextToChat} />
+          <BuilderPanel onSendToChat={sendTextToChat} activeModel={model} modelOptions={visibleModels} providerName={selectedProvider.name} />
         ) : activeView === 'repoRunner' ? (
           <RepoRunnerPanel onExplainWithChat={sendTextToChat} />
         ) : activeView === 'hardware' ? (
