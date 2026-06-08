@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { AgentPanel } from './components/agent/AgentPanel';
 import { ChameleonGuiPanel } from './components/hardware/ChameleonGuiPanel';
 import { agentProfiles } from './data/profiles';
 import { providerOptions } from './data/providers';
@@ -7,7 +8,7 @@ import { OpenAICompatibleProvider } from './providers/openaiCompatible';
 import type { ChatMessage as ProviderChatMessage } from './providers/types';
 
 type MessageRole = 'user' | 'assistant';
-type ActiveView = 'chat' | 'hardware';
+type ActiveView = 'chat' | 'agent' | 'hardware';
 
 interface ChatMessage {
   id: string;
@@ -101,6 +102,17 @@ function App() {
   const effectiveTerminalMode = profileId === 'terminal' || (providerId === 'ollama' && ollamaTerminalMode);
   const activeBaseUrl = providerId === 'ollama' ? ollamaBaseUrl : cloudBaseUrl || selectedProvider.baseUrlHint || '';
   const promptLayerOn = sendSystemPrompt && !effectiveTerminalMode;
+
+  const agentContext = useMemo(
+    () => ({
+      providerId,
+      providerName: selectedProvider.name,
+      model,
+      mode: effectiveTerminalMode ? 'Terminal Mode' : selectedProfile.name,
+      memoryEnabled,
+    }),
+    [effectiveTerminalMode, memoryEnabled, model, providerId, selectedProfile.name, selectedProvider.name],
+  );
 
   const ollamaProvider = useMemo(() => new OllamaProvider(ollamaBaseUrl), [ollamaBaseUrl]);
 
@@ -398,18 +410,13 @@ function App() {
 
         <section className="sidebar-section">
           <h2>Workspace</h2>
-          <button
-            className={`history-item ${activeView === 'chat' ? 'active' : ''}`}
-            type="button"
-            onClick={() => setActiveView('chat')}
-          >
+          <button className={`history-item ${activeView === 'chat' ? 'active' : ''}`} type="button" onClick={() => setActiveView('chat')}>
             Command Room
           </button>
-          <button
-            className={`history-item ${activeView === 'hardware' ? 'active' : ''}`}
-            type="button"
-            onClick={() => setActiveView('hardware')}
-          >
+          <button className={`history-item ${activeView === 'agent' ? 'active' : ''}`} type="button" onClick={() => setActiveView('agent')}>
+            Agent Mode
+          </button>
+          <button className={`history-item ${activeView === 'hardware' ? 'active' : ''}`} type="button" onClick={() => setActiveView('hardware')}>
             Hardware
           </button>
           <button className="history-item" type="button">
@@ -425,6 +432,7 @@ function App() {
           <span>Ollama local</span>
           <span>Terminal Mode</span>
           <span>Persistent local memory</span>
+          <span>Agent Mode task memory</span>
           <span>OpenAI-compatible cloud</span>
           <span>Chameleon hardware</span>
         </section>
@@ -434,13 +442,15 @@ function App() {
         <header className="topbar">
           <div>
             <p className="eyebrow">Private AI console</p>
-            <h2>{activeView === 'hardware' ? 'Hardware' : selectedProfile.name}</h2>
+            <h2>{activeView === 'hardware' ? 'Hardware' : activeView === 'agent' ? 'Agent Mode' : selectedProfile.name}</h2>
           </div>
-          <div className="status-pill">{activeView === 'hardware' ? 'Chameleon companion' : statusLabel}</div>
+          <div className="status-pill">{activeView === 'hardware' ? 'Chameleon companion' : activeView === 'agent' ? 'Task workspace' : statusLabel}</div>
         </header>
 
         {activeView === 'hardware' ? (
           <ChameleonGuiPanel onSendToChat={sendHardwareOutputToChat} />
+        ) : activeView === 'agent' ? (
+          <AgentPanel context={agentContext} />
         ) : (
           <>
             <section className="control-grid">
@@ -448,9 +458,7 @@ function App() {
                 Provider
                 <select value={providerId} onChange={(event) => handleProviderChange(event.target.value)}>
                   {providerOptions.map((provider) => (
-                    <option key={provider.id} value={provider.id}>
-                      {provider.name}
-                    </option>
+                    <option key={provider.id} value={provider.id}>{provider.name}</option>
                   ))}
                 </select>
               </label>
@@ -459,9 +467,7 @@ function App() {
                 Profile
                 <select value={profileId} onChange={(event) => setProfileId(event.target.value)}>
                   {agentProfiles.map((profile) => (
-                    <option key={profile.id} value={profile.id}>
-                      {profile.name}
-                    </option>
+                    <option key={profile.id} value={profile.id}>{profile.name}</option>
                   ))}
                 </select>
               </label>
@@ -487,20 +493,13 @@ function App() {
                   Ollama local endpoint
                   <input value={ollamaBaseUrl} onChange={(event) => setOllamaBaseUrl(event.target.value)} />
                 </label>
-                <p>
-                  Active: {model} • {effectiveTerminalMode ? 'Terminal Mode' : 'Chat Mode'} • Prompt Layer {promptLayerOn ? 'On' : 'Off'} • Memory {memoryEnabled ? 'On' : 'Off'}
-                </p>
+                <p>Active: {model} • {effectiveTerminalMode ? 'Terminal Mode' : 'Chat Mode'} • Prompt Layer {promptLayerOn ? 'On' : 'Off'} • Memory {memoryEnabled ? 'On' : 'Off'}</p>
               </section>
             ) : (
               <section className="local-provider-card cloud-config-card">
                 <label>
                   Cloud API key
-                  <input
-                    type="password"
-                    value={cloudApiKey}
-                    onChange={(event) => setCloudApiKey(event.target.value)}
-                    placeholder="Paste provider API key"
-                  />
+                  <input type="password" value={cloudApiKey} onChange={(event) => setCloudApiKey(event.target.value)} placeholder="Paste provider API key" />
                 </label>
                 <label>
                   Base URL
@@ -517,9 +516,7 @@ function App() {
                     <h3>Chat</h3>
                     <p>{selectedProvider.description}</p>
                   </div>
-                  <button type="button" className="ghost-button" onClick={handleClearMemory}>
-                    Clear Memory
-                  </button>
+                  <button type="button" className="ghost-button" onClick={handleClearMemory}>Clear Memory</button>
                 </div>
 
                 <div className="message-list">
@@ -532,98 +529,28 @@ function App() {
                 </div>
 
                 <form className="composer" onSubmit={handleSubmit}>
-                  <textarea
-                    value={input}
-                    onChange={(event) => setInput(event.target.value)}
-                    placeholder={providerId === 'ollama' ? 'Ask your local Ollama model...' : `Ask ${selectedProvider.name}...`}
-                  />
+                  <textarea value={input} onChange={(event) => setInput(event.target.value)} placeholder={providerId === 'ollama' ? 'Ask your local Ollama model...' : `Ask ${selectedProvider.name}...`} />
                   <button type="submit" disabled={isBusy}>{isBusy ? '...' : 'Send'}</button>
                 </form>
               </div>
 
               <aside className="settings-card">
                 <h3>Session Controls</h3>
-                <label className="toggle-row">
-                  Pin model
-                  <input
-                    type="checkbox"
-                    checked={pinnedModel}
-                    onChange={(event) => setPinnedModel(event.target.checked)}
-                  />
-                </label>
-
-                {providerId === 'ollama' && (
-                  <label className="toggle-row">
-                    Terminal Mode
-                    <input
-                      type="checkbox"
-                      checked={ollamaTerminalMode}
-                      onChange={(event) => setOllamaTerminalMode(event.target.checked)}
-                    />
-                  </label>
-                )}
-
-                <label className="toggle-row">
-                  Send profile prompt
-                  <input
-                    type="checkbox"
-                    checked={sendSystemPrompt}
-                    onChange={(event) => setSendSystemPrompt(event.target.checked)}
-                    disabled={effectiveTerminalMode}
-                  />
-                </label>
-
-                <label>
-                  Temperature
-                  <input
-                    type="range"
-                    min="0"
-                    max="2"
-                    step="0.1"
-                    value={temperature}
-                    onChange={(event) => setTemperature(Number(event.target.value))}
-                  />
-                  <strong>{temperature.toFixed(1)}</strong>
-                </label>
-
-                <label>
-                  Max output tokens
-                  <input
-                    type="number"
-                    min="64"
-                    max="32000"
-                    value={maxTokens}
-                    onChange={(event) => setMaxTokens(Number(event.target.value))}
-                  />
-                </label>
-
-                <label className="toggle-row">
-                  Local memory
-                  <input
-                    type="checkbox"
-                    checked={memoryEnabled}
-                    onChange={(event) => setMemoryEnabled(event.target.checked)}
-                  />
-                </label>
+                <label className="toggle-row">Pin model<input type="checkbox" checked={pinnedModel} onChange={(event) => setPinnedModel(event.target.checked)} /></label>
+                {providerId === 'ollama' && <label className="toggle-row">Terminal Mode<input type="checkbox" checked={ollamaTerminalMode} onChange={(event) => setOllamaTerminalMode(event.target.checked)} /></label>}
+                <label className="toggle-row">Send profile prompt<input type="checkbox" checked={sendSystemPrompt} onChange={(event) => setSendSystemPrompt(event.target.checked)} disabled={effectiveTerminalMode} /></label>
+                <label>Temperature<input type="range" min="0" max="2" step="0.1" value={temperature} onChange={(event) => setTemperature(Number(event.target.value))} /><strong>{temperature.toFixed(1)}</strong></label>
+                <label>Max output tokens<input type="number" min="64" max="32000" value={maxTokens} onChange={(event) => setMaxTokens(Number(event.target.value))} /></label>
+                <label className="toggle-row">Local memory<input type="checkbox" checked={memoryEnabled} onChange={(event) => setMemoryEnabled(event.target.checked)} /></label>
 
                 <div className="profile-preview">
                   <h4>Prompt Mode</h4>
-                  <p>
-                    {effectiveTerminalMode
-                      ? `Terminal Mode — ${memoryEnabled ? 'keeps prior turns in local memory.' : 'sends only the current prompt.'}`
-                      : promptLayerOn
-                        ? selectedProfile.systemPrompt
-                        : 'Profile prompt off — model receives chat messages without an added system prompt.'}
-                  </p>
+                  <p>{effectiveTerminalMode ? `Terminal Mode — ${memoryEnabled ? 'keeps prior turns in local memory.' : 'sends only the current prompt.'}` : promptLayerOn ? selectedProfile.systemPrompt : 'Profile prompt off — model receives chat messages without an added system prompt.'}</p>
                 </div>
 
                 <div className="provider-preview">
                   <h4>{providerId === 'ollama' && availableModels.length ? 'Installed Models' : 'Model Suggestions'}</h4>
-                  {visibleModels.map((example) => (
-                    <button key={example} type="button" onClick={() => handleModelChange(example)}>
-                      {example}
-                    </button>
-                  ))}
+                  {visibleModels.map((example) => <button key={example} type="button" onClick={() => handleModelChange(example)}>{example}</button>)}
                 </div>
               </aside>
             </section>
