@@ -1,4 +1,5 @@
 export type AgentProfileId =
+  | 'terminal'
   | 'general'
   | 'electrician'
   | 'mechanic'
@@ -16,6 +17,12 @@ export interface AgentProfile {
 }
 
 export const agentProfiles: AgentProfile[] = [
+  {
+    id: 'terminal',
+    name: 'Terminal Mode',
+    description: 'Plain prompt mode for matching local CLI behavior.',
+    systemPrompt: '',
+  },
   {
     id: 'general',
     name: 'General Assistant',
