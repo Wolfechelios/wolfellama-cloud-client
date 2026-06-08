@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { AgentPanel } from './components/agent/AgentPanel';
+import { BuilderPanel } from './components/builder/BuilderPanel';
 import { ChameleonGuiPanel } from './components/hardware/ChameleonGuiPanel';
 import { RepoRunnerPanel } from './components/repoRunner/RepoRunnerPanel';
 import { agentProfiles } from './data/profiles';
@@ -9,7 +10,7 @@ import { OpenAICompatibleProvider } from './providers/openaiCompatible';
 import type { ChatMessage as ProviderChatMessage } from './providers/types';
 
 type MessageRole = 'user' | 'assistant';
-type ActiveView = 'chat' | 'agent' | 'repoRunner' | 'hardware';
+type ActiveView = 'chat' | 'agent' | 'builder' | 'repoRunner' | 'hardware';
 
 interface ChatMessage {
   id: string;
@@ -25,8 +26,7 @@ const starterMessages: ChatMessage[] = [
     id: 'welcome',
     role: 'assistant',
     sendToModel: false,
-    content:
-      'WolfeLlama Cloud Client is ready. This welcome message is UI-only and is not sent to your model.',
+    content: 'WolfeLlama Cloud Client is ready. This welcome message is UI-only and is not sent to your model.',
   },
 ];
 
@@ -412,6 +412,7 @@ function App() {
         <section className="sidebar-section">
           <h2>Workspace</h2>
           <button className={`history-item ${activeView === 'repoRunner' ? 'active' : ''}`} type="button" onClick={() => setActiveView('repoRunner')}>Repo Runner</button>
+          <button className={`history-item ${activeView === 'builder' ? 'active' : ''}`} type="button" onClick={() => setActiveView('builder')}>Builder Mode</button>
           <button className={`history-item ${activeView === 'chat' ? 'active' : ''}`} type="button" onClick={() => setActiveView('chat')}>Command Room</button>
           <button className={`history-item ${activeView === 'agent' ? 'active' : ''}`} type="button" onClick={() => setActiveView('agent')}>Agent Mode</button>
           <button className={`history-item ${activeView === 'hardware' ? 'active' : ''}`} type="button" onClick={() => setActiveView('hardware')}>Hardware</button>
@@ -422,8 +423,8 @@ function App() {
         <section className="sidebar-section muted-list">
           <h2>Live Now</h2>
           <span>Paste GitHub URL</span>
-          <span>Detect app type</span>
-          <span>Detect package manager</span>
+          <span>Builder planning</span>
+          <span>Draft file changes</span>
           <span>Project library</span>
           <span>Plain-English logs</span>
           <span>AI error explanation</span>
@@ -434,12 +435,14 @@ function App() {
         <header className="topbar">
           <div>
             <p className="eyebrow">Private AI console</p>
-            <h2>{activeView === 'repoRunner' ? 'Repo Runner' : activeView === 'hardware' ? 'Hardware' : activeView === 'agent' ? 'Agent Mode' : selectedProfile.name}</h2>
+            <h2>{activeView === 'builder' ? 'Builder Mode' : activeView === 'repoRunner' ? 'Repo Runner' : activeView === 'hardware' ? 'Hardware' : activeView === 'agent' ? 'Agent Mode' : selectedProfile.name}</h2>
           </div>
-          <div className="status-pill">{activeView === 'repoRunner' ? 'GitHub app launcher' : activeView === 'hardware' ? 'Chameleon companion' : activeView === 'agent' ? 'Task workspace' : statusLabel}</div>
+          <div className="status-pill">{activeView === 'builder' ? 'AI build workspace' : activeView === 'repoRunner' ? 'GitHub app launcher' : activeView === 'hardware' ? 'Chameleon companion' : activeView === 'agent' ? 'Task workspace' : statusLabel}</div>
         </header>
 
-        {activeView === 'repoRunner' ? (
+        {activeView === 'builder' ? (
+          <BuilderPanel onSendToChat={sendTextToChat} />
+        ) : activeView === 'repoRunner' ? (
           <RepoRunnerPanel onExplainWithChat={sendTextToChat} />
         ) : activeView === 'hardware' ? (
           <ChameleonGuiPanel onSendToChat={sendTextToChat} />
