@@ -150,7 +150,8 @@ p {
 .chat-card,
 .settings-card,
 .hardware-panel,
-.local-provider-card {
+.local-provider-card,
+.active-model-card {
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 26px;
   background: rgba(8, 12, 24, 0.72);
@@ -184,9 +185,45 @@ p {
   padding: 10px 14px;
 }
 
+.active-model-card {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) 2fr;
+  gap: 18px;
+  padding: 18px;
+}
+
+.active-model-card h3 {
+  font-size: 1.25rem;
+  word-break: break-word;
+}
+
+.active-model-card dl {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0;
+}
+
+.active-model-card div {
+  min-width: 0;
+}
+
+.active-model-card dt {
+  color: #7c8ba0;
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.active-model-card dd {
+  margin: 5px 0 0;
+  color: #dfeeff;
+  overflow-wrap: anywhere;
+}
+
 .control-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: 1.4fr 1fr 1fr 1fr auto;
   gap: 14px;
   padding: 16px;
 }
@@ -363,7 +400,9 @@ textarea:focus {
   .workspace,
   .control-grid,
   .hardware-grid,
-  .local-provider-card {
+  .local-provider-card,
+  .active-model-card,
+  .active-model-card dl {
     grid-template-columns: 1fr;
   }
 
