@@ -4,22 +4,41 @@ import type { BuilderFileChange, BuilderTask } from '../../builder/builderTypes'
 
 interface BuilderPanelProps {
   onSendToChat: (text: string) => void;
+  activeModel: string;
+  modelOptions: string[];
+  providerName: string;
+}
+
+const BUILDER_MODEL_KEY = 'wolfellama.builder.model';
+
+function getSavedBuilderModel(fallback: string) {
+  if (typeof window === 'undefined') return fallback;
+  return window.localStorage.getItem(BUILDER_MODEL_KEY) ?? fallback;
 }
 
 function updateTask(task: BuilderTask): BuilderTask {
   return { ...task, updatedAt: new Date().toISOString() };
 }
 
-export function BuilderPanel({ onSendToChat }: BuilderPanelProps) {
+export function BuilderPanel({ onSendToChat, activeModel, modelOptions, providerName }: BuilderPanelProps) {
   const [goal, setGoal] = useState('');
   const [task, setTask] = useState<BuilderTask | undefined>(() => loadBuilderTask());
   const [filePath, setFilePath] = useState('src/App.tsx');
   const [changeSummary, setChangeSummary] = useState('Describe the intended change.');
   const [afterContent, setAfterContent] = useState('');
+  const [builderModel, setBuilderModel] = useState(() => getSavedBuilderModel(activeModel));
 
   useEffect(() => {
     saveBuilderTask(task);
   }, [task]);
+
+  useEffect(() => {
+    window.localStorage.setItem(BUILDER_MODEL_KEY, builderModel);
+  }, [builderModel]);
+
+  useEffect(() => {
+    if (!builderModel && activeModel) setBuilderModel(activeModel);
+  }, [activeModel, builderModel]);
 
   function startTask() {
     const trimmed = goal.trim();
@@ -33,7 +52,7 @@ export function BuilderPanel({ onSendToChat }: BuilderPanelProps) {
   }
 
   function askAiForPlan(currentTask: BuilderTask) {
-    onSendToChat(`You are Builder Mode for WolfeLlama. Build or fix this app request:\n\n${currentTask.goal}\n\nReturn a practical plan, likely files to edit, and a safe patch strategy. Do not save files yet. Show changes for review first.`);
+    onSendToChat(`Use this model as the Builder Mode model: ${builderModel}\nProvider: ${providerName}\n\nYou are Builder Mode for WolfeLlama. Build or fix this app request:\n\n${currentTask.goal}\n\nReturn a practical plan, likely files to edit, and a safe patch strategy. Do not save files yet. Show changes for review first.`);
   }
 
   function addDraftChange(currentTask: BuilderTask) {
@@ -61,7 +80,7 @@ export function BuilderPanel({ onSendToChat }: BuilderPanelProps) {
   }
 
   function sendChangeToChat(change: BuilderFileChange) {
-    onSendToChat(`Review this proposed file change for ${change.filePath}:\n\nSummary: ${change.summary}\n\nProposed content:\n\n\`\`\`\n${change.after}\n\`\`\`\n\nTell me if this is safe, what it changes, and whether anything else must be updated.`);
+    onSendToChat(`Use this model as the Builder Mode model: ${builderModel}\nProvider: ${providerName}\n\nReview this proposed file change for ${change.filePath}:\n\nSummary: ${change.summary}\n\nProposed content:\n\n\`\`\`\n${change.after}\n\`\`\`\n\nTell me if this is safe, what it changes, and whether anything else must be updated.`);
   }
 
   return (
@@ -70,9 +89,22 @@ export function BuilderPanel({ onSendToChat }: BuilderPanelProps) {
         <div>
           <p className="eyebrow">AI app builder</p>
           <h3>Builder Mode</h3>
-          <p>Describe what to build, get a plan, propose file changes, review them, then send changes to chat for AI help.</p>
+          <p>Describe what to build, choose the model to build with, review proposed file changes, then send changes to chat for AI help.</p>
         </div>
         <div className="hardware-badge">{task ? 'active build' : 'ready'}</div>
+      </div>
+
+      <div className="builder-model-card">
+        <label>
+          Builder model
+          <input list="builder-model-options" value={builderModel} onChange={(event) => setBuilderModel(event.target.value)} placeholder={activeModel} />
+          <datalist id="builder-model-options">
+            {[builderModel, activeModel, ...modelOptions].filter(Boolean).map((option) => (
+              <option key={option} value={option} />
+            ))}
+          </datalist>
+        </label>
+        <p>Provider: {providerName} • Builder model: {builderModel || activeModel}</p>
       </div>
 
       <div className="builder-goal-card">
