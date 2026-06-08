@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { AgentPanel } from './components/agent/AgentPanel';
 import { ChameleonGuiPanel } from './components/hardware/ChameleonGuiPanel';
+import { RepoRunnerPanel } from './components/repoRunner/RepoRunnerPanel';
 import { agentProfiles } from './data/profiles';
 import { providerOptions } from './data/providers';
 import { OllamaProvider } from './providers/ollama';
@@ -8,7 +9,7 @@ import { OpenAICompatibleProvider } from './providers/openaiCompatible';
 import type { ChatMessage as ProviderChatMessage } from './providers/types';
 
 type MessageRole = 'user' | 'assistant';
-type ActiveView = 'chat' | 'agent' | 'hardware';
+type ActiveView = 'chat' | 'agent' | 'repoRunner' | 'hardware';
 
 interface ChatMessage {
   id: string;
@@ -233,6 +234,11 @@ function App() {
     setStatusLabel('Memory cleared');
   }
 
+  function sendTextToChat(text: string) {
+    setInput(text);
+    setActiveView('chat');
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const trimmed = input.trim();
@@ -318,11 +324,6 @@ function App() {
     }
   }
 
-  function sendHardwareOutputToChat(text: string) {
-    setInput(text);
-    setActiveView('chat');
-  }
-
   async function handleConnectProvider() {
     if (providerId !== 'ollama') {
       if (!selectedProvider.openAICompatible || !cloudProvider) {
@@ -400,7 +401,7 @@ function App() {
           <div className="brand-mark">WL</div>
           <div>
             <h1>WolfeLlama</h1>
-            <p>Cloud + Local Client</p>
+            <p>GitHub Repo Runner</p>
           </div>
         </div>
 
@@ -410,31 +411,22 @@ function App() {
 
         <section className="sidebar-section">
           <h2>Workspace</h2>
-          <button className={`history-item ${activeView === 'chat' ? 'active' : ''}`} type="button" onClick={() => setActiveView('chat')}>
-            Command Room
-          </button>
-          <button className={`history-item ${activeView === 'agent' ? 'active' : ''}`} type="button" onClick={() => setActiveView('agent')}>
-            Agent Mode
-          </button>
-          <button className={`history-item ${activeView === 'hardware' ? 'active' : ''}`} type="button" onClick={() => setActiveView('hardware')}>
-            Hardware
-          </button>
-          <button className="history-item" type="button">
-            Provider Setup
-          </button>
-          <button className="history-item" type="button" onClick={handleClearMemory}>
-            Clear Memory
-          </button>
+          <button className={`history-item ${activeView === 'repoRunner' ? 'active' : ''}`} type="button" onClick={() => setActiveView('repoRunner')}>Repo Runner</button>
+          <button className={`history-item ${activeView === 'chat' ? 'active' : ''}`} type="button" onClick={() => setActiveView('chat')}>Command Room</button>
+          <button className={`history-item ${activeView === 'agent' ? 'active' : ''}`} type="button" onClick={() => setActiveView('agent')}>Agent Mode</button>
+          <button className={`history-item ${activeView === 'hardware' ? 'active' : ''}`} type="button" onClick={() => setActiveView('hardware')}>Hardware</button>
+          <button className="history-item" type="button">Provider Setup</button>
+          <button className="history-item" type="button" onClick={handleClearMemory}>Clear Memory</button>
         </section>
 
         <section className="sidebar-section muted-list">
           <h2>Live Now</h2>
-          <span>Ollama local</span>
-          <span>Terminal Mode</span>
-          <span>Persistent local memory</span>
-          <span>Agent Mode task memory</span>
-          <span>OpenAI-compatible cloud</span>
-          <span>Chameleon hardware</span>
+          <span>Paste GitHub URL</span>
+          <span>Detect app type</span>
+          <span>Detect package manager</span>
+          <span>Project library</span>
+          <span>Plain-English logs</span>
+          <span>AI error explanation</span>
         </section>
       </aside>
 
@@ -442,96 +434,44 @@ function App() {
         <header className="topbar">
           <div>
             <p className="eyebrow">Private AI console</p>
-            <h2>{activeView === 'hardware' ? 'Hardware' : activeView === 'agent' ? 'Agent Mode' : selectedProfile.name}</h2>
+            <h2>{activeView === 'repoRunner' ? 'Repo Runner' : activeView === 'hardware' ? 'Hardware' : activeView === 'agent' ? 'Agent Mode' : selectedProfile.name}</h2>
           </div>
-          <div className="status-pill">{activeView === 'hardware' ? 'Chameleon companion' : activeView === 'agent' ? 'Task workspace' : statusLabel}</div>
+          <div className="status-pill">{activeView === 'repoRunner' ? 'GitHub app launcher' : activeView === 'hardware' ? 'Chameleon companion' : activeView === 'agent' ? 'Task workspace' : statusLabel}</div>
         </header>
 
-        {activeView === 'hardware' ? (
-          <ChameleonGuiPanel onSendToChat={sendHardwareOutputToChat} />
+        {activeView === 'repoRunner' ? (
+          <RepoRunnerPanel onExplainWithChat={sendTextToChat} />
+        ) : activeView === 'hardware' ? (
+          <ChameleonGuiPanel onSendToChat={sendTextToChat} />
         ) : activeView === 'agent' ? (
           <AgentPanel context={agentContext} />
         ) : (
           <>
             <section className="control-grid">
-              <label>
-                Provider
-                <select value={providerId} onChange={(event) => handleProviderChange(event.target.value)}>
-                  {providerOptions.map((provider) => (
-                    <option key={provider.id} value={provider.id}>{provider.name}</option>
-                  ))}
-                </select>
-              </label>
-
-              <label>
-                Profile
-                <select value={profileId} onChange={(event) => setProfileId(event.target.value)}>
-                  {agentProfiles.map((profile) => (
-                    <option key={profile.id} value={profile.id}>{profile.name}</option>
-                  ))}
-                </select>
-              </label>
-
-              <label>
-                Model
-                <input list="available-models" value={model} onChange={(event) => handleModelChange(event.target.value)} />
-                <datalist id="available-models">
-                  {visibleModels.map((visibleModel) => (
-                    <option key={visibleModel} value={visibleModel} />
-                  ))}
-                </datalist>
-              </label>
-
-              <button className="connect-button" type="button" onClick={handleConnectProvider} disabled={isBusy}>
-                {isBusy ? 'Working...' : providerId === 'ollama' ? 'Check Local Model' : 'Connect Cloud'}
-              </button>
+              <label>Provider<select value={providerId} onChange={(event) => handleProviderChange(event.target.value)}>{providerOptions.map((provider) => <option key={provider.id} value={provider.id}>{provider.name}</option>)}</select></label>
+              <label>Profile<select value={profileId} onChange={(event) => setProfileId(event.target.value)}>{agentProfiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.name}</option>)}</select></label>
+              <label>Model<input list="available-models" value={model} onChange={(event) => handleModelChange(event.target.value)} /><datalist id="available-models">{visibleModels.map((visibleModel) => <option key={visibleModel} value={visibleModel} />)}</datalist></label>
+              <button className="connect-button" type="button" onClick={handleConnectProvider} disabled={isBusy}>{isBusy ? 'Working...' : providerId === 'ollama' ? 'Check Local Model' : 'Connect Cloud'}</button>
             </section>
 
             {providerId === 'ollama' ? (
               <section className="local-provider-card">
-                <label>
-                  Ollama local endpoint
-                  <input value={ollamaBaseUrl} onChange={(event) => setOllamaBaseUrl(event.target.value)} />
-                </label>
+                <label>Ollama local endpoint<input value={ollamaBaseUrl} onChange={(event) => setOllamaBaseUrl(event.target.value)} /></label>
                 <p>Active: {model} • {effectiveTerminalMode ? 'Terminal Mode' : 'Chat Mode'} • Prompt Layer {promptLayerOn ? 'On' : 'Off'} • Memory {memoryEnabled ? 'On' : 'Off'}</p>
               </section>
             ) : (
               <section className="local-provider-card cloud-config-card">
-                <label>
-                  Cloud API key
-                  <input type="password" value={cloudApiKey} onChange={(event) => setCloudApiKey(event.target.value)} placeholder="Paste provider API key" />
-                </label>
-                <label>
-                  Base URL
-                  <input value={activeBaseUrl} onChange={(event) => setCloudBaseUrl(event.target.value)} />
-                </label>
+                <label>Cloud API key<input type="password" value={cloudApiKey} onChange={(event) => setCloudApiKey(event.target.value)} placeholder="Paste provider API key" /></label>
+                <label>Base URL<input value={activeBaseUrl} onChange={(event) => setCloudBaseUrl(event.target.value)} /></label>
                 <p>Active: {model} • {selectedProvider.name} • Memory {memoryEnabled ? 'On' : 'Off'}</p>
               </section>
             )}
 
             <section className="workspace">
               <div className="chat-card">
-                <div className="chat-header">
-                  <div>
-                    <h3>Chat</h3>
-                    <p>{selectedProvider.description}</p>
-                  </div>
-                  <button type="button" className="ghost-button" onClick={handleClearMemory}>Clear Memory</button>
-                </div>
-
-                <div className="message-list">
-                  {messages.map((message) => (
-                    <article key={message.id} className={`message ${message.role}`}>
-                      <span>{message.role === 'user' ? 'You' : 'WolfeLlama'}</span>
-                      <p>{message.content}</p>
-                    </article>
-                  ))}
-                </div>
-
-                <form className="composer" onSubmit={handleSubmit}>
-                  <textarea value={input} onChange={(event) => setInput(event.target.value)} placeholder={providerId === 'ollama' ? 'Ask your local Ollama model...' : `Ask ${selectedProvider.name}...`} />
-                  <button type="submit" disabled={isBusy}>{isBusy ? '...' : 'Send'}</button>
-                </form>
+                <div className="chat-header"><div><h3>Chat</h3><p>{selectedProvider.description}</p></div><button type="button" className="ghost-button" onClick={handleClearMemory}>Clear Memory</button></div>
+                <div className="message-list">{messages.map((message) => <article key={message.id} className={`message ${message.role}`}><span>{message.role === 'user' ? 'You' : 'WolfeLlama'}</span><p>{message.content}</p></article>)}</div>
+                <form className="composer" onSubmit={handleSubmit}><textarea value={input} onChange={(event) => setInput(event.target.value)} placeholder={providerId === 'ollama' ? 'Ask your local Ollama model...' : `Ask ${selectedProvider.name}...`} /><button type="submit" disabled={isBusy}>{isBusy ? '...' : 'Send'}</button></form>
               </div>
 
               <aside className="settings-card">
@@ -542,16 +482,8 @@ function App() {
                 <label>Temperature<input type="range" min="0" max="2" step="0.1" value={temperature} onChange={(event) => setTemperature(Number(event.target.value))} /><strong>{temperature.toFixed(1)}</strong></label>
                 <label>Max output tokens<input type="number" min="64" max="32000" value={maxTokens} onChange={(event) => setMaxTokens(Number(event.target.value))} /></label>
                 <label className="toggle-row">Local memory<input type="checkbox" checked={memoryEnabled} onChange={(event) => setMemoryEnabled(event.target.checked)} /></label>
-
-                <div className="profile-preview">
-                  <h4>Prompt Mode</h4>
-                  <p>{effectiveTerminalMode ? `Terminal Mode — ${memoryEnabled ? 'keeps prior turns in local memory.' : 'sends only the current prompt.'}` : promptLayerOn ? selectedProfile.systemPrompt : 'Profile prompt off — model receives chat messages without an added system prompt.'}</p>
-                </div>
-
-                <div className="provider-preview">
-                  <h4>{providerId === 'ollama' && availableModels.length ? 'Installed Models' : 'Model Suggestions'}</h4>
-                  {visibleModels.map((example) => <button key={example} type="button" onClick={() => handleModelChange(example)}>{example}</button>)}
-                </div>
+                <div className="profile-preview"><h4>Prompt Mode</h4><p>{effectiveTerminalMode ? `Terminal Mode — ${memoryEnabled ? 'keeps prior turns in local memory.' : 'sends only the current prompt.'}` : promptLayerOn ? selectedProfile.systemPrompt : 'Profile prompt off — model receives chat messages without an added system prompt.'}</p></div>
+                <div className="provider-preview"><h4>{providerId === 'ollama' && availableModels.length ? 'Installed Models' : 'Model Suggestions'}</h4>{visibleModels.map((example) => <button key={example} type="button" onClick={() => handleModelChange(example)}>{example}</button>)}</div>
               </aside>
             </section>
           </>
