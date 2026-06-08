@@ -5,9 +5,7 @@
   color: #f7fbff;
 }
 
-* {
-  box-sizing: border-box;
-}
+* { box-sizing: border-box; }
 
 body {
   margin: 0;
@@ -19,412 +17,85 @@ body {
     #05070d;
 }
 
-button,
-input,
-select,
-textarea {
-  font: inherit;
-}
+button, input, select, textarea { font: inherit; }
+button { cursor: pointer; }
+button:disabled { cursor: not-allowed; opacity: 0.65; }
 
-button {
-  cursor: pointer;
-}
+.app-shell { display: grid; grid-template-columns: 290px 1fr; min-height: 100vh; }
+.sidebar { border-right: 1px solid rgba(255,255,255,.08); background: rgba(6,9,18,.82); backdrop-filter: blur(24px); padding: 24px; }
+.brand-block { display: flex; align-items: center; gap: 14px; margin-bottom: 28px; }
+.brand-mark { display: grid; place-items: center; width: 48px; height: 48px; border: 1px solid rgba(65,190,255,.55); border-radius: 16px; background: linear-gradient(135deg, rgba(52,176,255,.22), rgba(255,150,60,.12)); box-shadow: 0 0 28px rgba(30,170,255,.22); font-weight: 800; }
+h1, h2, h3, h4, p { margin: 0; }
+.brand-block h1 { font-size: 1.05rem; }
+.brand-block p, .eyebrow, .chat-header p, .profile-preview p, .hardware-hero p, .local-provider-card p, .agent-hero p { color: #96a7bb; }
 
-button:disabled {
-  cursor: not-allowed;
-  opacity: 0.65;
-}
+.new-chat-button, .connect-button, .composer button { border: 0; border-radius: 14px; background: linear-gradient(135deg, #29aaff, #d48845); color: #06101a; font-weight: 800; padding: 12px 14px; }
+.new-chat-button { width: 100%; margin-bottom: 28px; }
+.sidebar-section { display: grid; gap: 10px; margin-bottom: 28px; }
+.sidebar-section h2 { color: #7c8ba0; font-size: .72rem; letter-spacing: .14em; text-transform: uppercase; }
+.history-item, .ghost-button, .provider-preview button, .repo-library-card button { border: 1px solid rgba(255,255,255,.08); border-radius: 14px; background: rgba(255,255,255,.04); color: #dfeeff; padding: 11px 12px; text-align: left; }
+.history-item.active, .repo-library-card button.active { border-color: rgba(65,190,255,.45); background: rgba(40,160,255,.12); }
+.muted-list span { color: #6f7e91; font-size: .9rem; }
 
-.app-shell {
-  display: grid;
-  grid-template-columns: 290px 1fr;
-  min-height: 100vh;
-}
+.main-panel { display: flex; flex-direction: column; gap: 18px; padding: 24px; }
+.topbar, .control-grid, .chat-card, .settings-card, .hardware-panel, .local-provider-card, .agent-panel, .repo-runner-panel { border: 1px solid rgba(255,255,255,.08); border-radius: 26px; background: rgba(8,12,24,.72); box-shadow: 0 22px 80px rgba(0,0,0,.28); }
+.topbar { display: flex; justify-content: space-between; align-items: center; padding: 22px; }
+.topbar h2 { font-size: 1.8rem; }
+.eyebrow { margin-bottom: 5px; font-size: .78rem; letter-spacing: .16em; text-transform: uppercase; }
+.status-pill, .hardware-badge { border: 1px solid rgba(65,190,255,.35); border-radius: 999px; background: rgba(65,190,255,.1); color: #a8ddff; padding: 10px 14px; }
+.control-grid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 14px; padding: 16px; }
+.local-provider-card { display: grid; grid-template-columns: minmax(240px,420px) 1fr; align-items: end; gap: 14px; padding: 16px; }
+label { display: grid; gap: 8px; color: #aebdd0; font-size: .86rem; }
+input, select, textarea { width: 100%; border: 1px solid rgba(255,255,255,.09); border-radius: 14px; background: rgba(255,255,255,.055); color: #f5fbff; padding: 11px 12px; outline: none; }
+input:focus, select:focus, textarea:focus { border-color: rgba(65,190,255,.65); box-shadow: 0 0 0 3px rgba(65,190,255,.12); }
+.workspace { display: grid; grid-template-columns: 1fr 340px; gap: 18px; min-height: 0; }
+.chat-card, .settings-card, .hardware-panel, .agent-panel, .repo-runner-panel { padding: 18px; }
+.chat-card { display: flex; flex-direction: column; min-height: 620px; }
+.chat-header, .hardware-hero, .agent-hero { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; padding-bottom: 16px; }
+.message-list { display: flex; flex: 1; flex-direction: column; gap: 14px; overflow: auto; padding: 8px 4px 18px; }
+.message { max-width: 78%; border: 1px solid rgba(255,255,255,.08); border-radius: 20px; padding: 14px 16px; }
+.message span { display: block; margin-bottom: 7px; color: #85cfff; font-size: .76rem; letter-spacing: .08em; text-transform: uppercase; }
+.message.assistant { background: rgba(255,255,255,.05); }
+.message.user { align-self: flex-end; background: rgba(42,170,255,.13); }
+.composer { display: grid; grid-template-columns: 1fr 110px; gap: 12px; border-top: 1px solid rgba(255,255,255,.08); padding-top: 16px; }
+.composer textarea { min-height: 82px; resize: vertical; }
+.settings-card { display: flex; flex-direction: column; gap: 18px; }
+.toggle-row { display: flex; align-items: center; justify-content: space-between; }
+.toggle-row input { width: auto; }
+.profile-preview, .provider-preview { display: grid; gap: 10px; border-top: 1px solid rgba(255,255,255,.08); padding-top: 16px; }
+.provider-preview button { text-align: center; }
+.hardware-panel, .agent-panel, .repo-runner-panel { display: grid; gap: 18px; }
+.hardware-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.hardware-actions { display: flex; flex-wrap: wrap; gap: 12px; }
+.hardware-status, .agent-context-card, .agent-progress { border: 1px solid rgba(65,190,255,.18); border-radius: 16px; background: rgba(65,190,255,.08); color: #b9e5ff; padding: 14px; }
+.diagnostic-box { min-height: 180px; resize: vertical; }
+.agent-panel textarea { min-height: 120px; resize: vertical; }
+.agent-task-card, .agent-log-card { border: 1px solid rgba(255,255,255,.08); border-radius: 18px; background: rgba(255,255,255,.04); padding: 16px; }
+.agent-task-card ol { display: grid; gap: 10px; margin: 14px 0 0; padding-left: 22px; }
+.agent-step { border-left: 3px solid rgba(255,255,255,.18); padding-left: 10px; }
+.agent-step.complete { border-left-color: rgba(65,190,255,.85); }
+.agent-step.blocked, .agent-step.failed { border-left-color: rgba(255,150,60,.85); }
+.agent-step p, .agent-step small, .agent-log-card p { color: #96a7bb; }
+.agent-log-card { display: grid; gap: 8px; }
+.agent-log-card span { color: #85cfff; font-size: .78rem; }
 
-.sidebar {
-  border-right: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(6, 9, 18, 0.82);
-  backdrop-filter: blur(24px);
-  padding: 24px;
-}
-
-.brand-block {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  margin-bottom: 28px;
-}
-
-.brand-mark {
-  display: grid;
-  place-items: center;
-  width: 48px;
-  height: 48px;
-  border: 1px solid rgba(65, 190, 255, 0.55);
-  border-radius: 16px;
-  background: linear-gradient(135deg, rgba(52, 176, 255, 0.22), rgba(255, 150, 60, 0.12));
-  box-shadow: 0 0 28px rgba(30, 170, 255, 0.22);
-  font-weight: 800;
-}
-
-h1,
-h2,
-h3,
-h4,
-p {
-  margin: 0;
-}
-
-.brand-block h1 {
-  font-size: 1.05rem;
-}
-
-.brand-block p,
-.eyebrow,
-.chat-header p,
-.profile-preview p,
-.hardware-hero p,
-.local-provider-card p,
-.agent-hero p {
-  color: #96a7bb;
-}
-
-.new-chat-button,
-.connect-button,
-.composer button {
-  border: 0;
-  border-radius: 14px;
-  background: linear-gradient(135deg, #29aaff, #d48845);
-  color: #06101a;
-  font-weight: 800;
-  padding: 12px 14px;
-}
-
-.new-chat-button {
-  width: 100%;
-  margin-bottom: 28px;
-}
-
-.sidebar-section {
-  display: grid;
-  gap: 10px;
-  margin-bottom: 28px;
-}
-
-.sidebar-section h2 {
-  color: #7c8ba0;
-  font-size: 0.72rem;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-}
-
-.history-item,
-.ghost-button,
-.provider-preview button {
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.04);
-  color: #dfeeff;
-  padding: 11px 12px;
-  text-align: left;
-}
-
-.history-item.active {
-  border-color: rgba(65, 190, 255, 0.45);
-  background: rgba(40, 160, 255, 0.12);
-}
-
-.muted-list span {
-  color: #6f7e91;
-  font-size: 0.9rem;
-}
-
-.main-panel {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-  padding: 24px;
-}
-
-.topbar,
-.control-grid,
-.chat-card,
-.settings-card,
-.hardware-panel,
-.local-provider-card,
-.agent-panel {
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 26px;
-  background: rgba(8, 12, 24, 0.72);
-  box-shadow: 0 22px 80px rgba(0, 0, 0, 0.28);
-}
-
-.topbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 22px;
-}
-
-.topbar h2 {
-  font-size: 1.8rem;
-}
-
-.eyebrow {
-  margin-bottom: 5px;
-  font-size: 0.78rem;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-}
-
-.status-pill,
-.hardware-badge {
-  border: 1px solid rgba(65, 190, 255, 0.35);
-  border-radius: 999px;
-  background: rgba(65, 190, 255, 0.1);
-  color: #a8ddff;
-  padding: 10px 14px;
-}
-
-.control-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 14px;
-  padding: 16px;
-}
-
-.local-provider-card {
-  display: grid;
-  grid-template-columns: minmax(240px, 420px) 1fr;
-  align-items: end;
-  gap: 14px;
-  padding: 16px;
-}
-
-label {
-  display: grid;
-  gap: 8px;
-  color: #aebdd0;
-  font-size: 0.86rem;
-}
-
-input,
-select,
-textarea {
-  width: 100%;
-  border: 1px solid rgba(255, 255, 255, 0.09);
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.055);
-  color: #f5fbff;
-  padding: 11px 12px;
-  outline: none;
-}
-
-input:focus,
-select:focus,
-textarea:focus {
-  border-color: rgba(65, 190, 255, 0.65);
-  box-shadow: 0 0 0 3px rgba(65, 190, 255, 0.12);
-}
-
-.workspace {
-  display: grid;
-  grid-template-columns: 1fr 340px;
-  gap: 18px;
-  min-height: 0;
-}
-
-.chat-card,
-.settings-card,
-.hardware-panel,
-.agent-panel {
-  padding: 18px;
-}
-
-.chat-card {
-  display: flex;
-  flex-direction: column;
-  min-height: 620px;
-}
-
-.chat-header,
-.hardware-hero,
-.agent-hero {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 14px;
-  padding-bottom: 16px;
-}
-
-.message-list {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  gap: 14px;
-  overflow: auto;
-  padding: 8px 4px 18px;
-}
-
-.message {
-  max-width: 78%;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 20px;
-  padding: 14px 16px;
-}
-
-.message span {
-  display: block;
-  margin-bottom: 7px;
-  color: #85cfff;
-  font-size: 0.76rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.message.assistant {
-  background: rgba(255, 255, 255, 0.05);
-}
-
-.message.user {
-  align-self: flex-end;
-  background: rgba(42, 170, 255, 0.13);
-}
-
-.composer {
-  display: grid;
-  grid-template-columns: 1fr 110px;
-  gap: 12px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-  padding-top: 16px;
-}
-
-.composer textarea {
-  min-height: 82px;
-  resize: vertical;
-}
-
-.settings-card {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-}
-
-.toggle-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.toggle-row input {
-  width: auto;
-}
-
-.profile-preview,
-.provider-preview {
-  display: grid;
-  gap: 10px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-  padding-top: 16px;
-}
-
-.provider-preview button {
-  text-align: center;
-}
-
-.hardware-panel,
-.agent-panel {
-  display: grid;
-  gap: 18px;
-}
-
-.hardware-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 14px;
-}
-
-.hardware-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-}
-
-.hardware-status,
-.agent-context-card,
-.agent-progress {
-  border: 1px solid rgba(65, 190, 255, 0.18);
-  border-radius: 16px;
-  background: rgba(65, 190, 255, 0.08);
-  color: #b9e5ff;
-  padding: 14px;
-}
-
-.diagnostic-box {
-  min-height: 180px;
-  resize: vertical;
-}
-
-.agent-panel textarea {
-  min-height: 120px;
-  resize: vertical;
-}
-
-.agent-task-card,
-.agent-log-card {
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.04);
-  padding: 16px;
-}
-
-.agent-task-card ol {
-  display: grid;
-  gap: 10px;
-  margin: 14px 0 0;
-  padding-left: 22px;
-}
-
-.agent-step {
-  border-left: 3px solid rgba(255, 255, 255, 0.18);
-  padding-left: 10px;
-}
-
-.agent-step.complete {
-  border-left-color: rgba(65, 190, 255, 0.85);
-}
-
-.agent-step.blocked,
-.agent-step.failed {
-  border-left-color: rgba(255, 150, 60, 0.85);
-}
-
-.agent-step p,
-.agent-step small,
-.agent-log-card p {
-  color: #96a7bb;
-}
-
-.agent-log-card {
-  display: grid;
-  gap: 8px;
-}
-
-.agent-log-card span {
-  color: #85cfff;
-  font-size: 0.78rem;
-}
+.repo-runner-url-row { display: grid; grid-template-columns: 1fr auto; gap: 14px; align-items: end; }
+.repo-runner-layout { display: grid; grid-template-columns: 280px 1fr; gap: 18px; }
+.repo-library-card, .repo-project-card, .repo-env-card, .repo-log-card { border: 1px solid rgba(255,255,255,.08); border-radius: 18px; background: rgba(255,255,255,.04); padding: 16px; }
+.repo-library-card { display: flex; flex-direction: column; gap: 10px; align-self: start; }
+.repo-library-card button { display: grid; gap: 5px; }
+.repo-library-card span, .repo-project-card p, .repo-env-card p, .repo-log-card p { color: #96a7bb; }
+.repo-project-card { display: grid; gap: 16px; }
+.repo-project-header { display: flex; justify-content: space-between; gap: 14px; align-items: flex-start; }
+.repo-facts-grid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 10px; }
+.repo-facts-grid span { border: 1px solid rgba(65,190,255,.18); border-radius: 14px; background: rgba(65,190,255,.08); color: #b9e5ff; padding: 12px; overflow-wrap: anywhere; }
+.repo-env-card { display: grid; gap: 12px; }
+.repo-env-row { display: grid; grid-template-columns: 1fr 2fr; gap: 10px; }
+.repo-log-card { display: grid; gap: 12px; }
+.repo-log-card article { display: grid; gap: 6px; border-top: 1px solid rgba(255,255,255,.08); padding-top: 10px; }
+.repo-log-card code { color: #f5fbff; white-space: pre-wrap; overflow-wrap: anywhere; }
 
 @media (max-width: 1100px) {
-  .app-shell,
-  .workspace,
-  .control-grid,
-  .hardware-grid,
-  .local-provider-card {
-    grid-template-columns: 1fr;
-  }
-
-  .sidebar {
-    display: none;
-  }
+  .app-shell, .workspace, .control-grid, .hardware-grid, .local-provider-card, .repo-runner-url-row, .repo-runner-layout, .repo-facts-grid, .repo-env-row { grid-template-columns: 1fr; }
+  .sidebar { display: none; }
 }
