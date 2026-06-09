@@ -11,10 +11,11 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "lint": "tsc --noEmit",
+    "desktop:check": "npm run build && node scripts/assert-desktop-build.cjs",
     "desktop:dev": "cross-env ELECTRON_DEV_SERVER_URL=http://127.0.0.1:5173 concurrently -k \"npm run dev\" \"wait-on http://127.0.0.1:5173 && electron .\"",
-    "desktop:pack": "npm run build && electron-builder --dir",
-    "desktop:win": "npm run build && electron-builder --win nsis --x64",
-    "desktop:win:portable": "npm run build && electron-builder --win portable --x64"
+    "desktop:pack": "npm run desktop:check && electron-builder --dir",
+    "desktop:win": "npm run desktop:check && electron-builder --win nsis --x64",
+    "desktop:win:portable": "npm run desktop:check && electron-builder --win portable --x64"
   },
   "dependencies": {
     "@vitejs/plugin-react": "latest",
@@ -43,6 +44,7 @@
     "files": [
       "dist/**/*",
       "electron/**/*",
+      "scripts/assert-desktop-build.cjs",
       "package.json"
     ],
     "extraMetadata": {
