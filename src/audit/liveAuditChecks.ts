@@ -122,7 +122,7 @@ export function createLiveAuditChecks(): AuditCheck[] {
         status: canStoreJson('wolfellama.audit.builder.task', {
           id: 'audit-task',
           goal: 'audit builder task storage',
-          plan: ['inspect', 'patch', 'review'],
+          plan: ['inspect', 'review', 'finish'],
           changes: [],
           notes: [],
           createdAt: new Date().toISOString(),
@@ -141,16 +141,21 @@ export function createLiveAuditChecks(): AuditCheck[] {
         status: canStoreJson('wolfellama.audit.builder.zip', {
           name: 'audit-project.zip',
           size: 1234,
+          rootPath: 'audit-project',
+          framework: 'Vite',
+          packageManager: 'npm',
           fileCount: 3,
           textFileCount: 2,
+          ignoredCount: 1,
+          ignoredFolders: [{ folder: 'node_modules', count: 1 }],
           files: [
             { path: 'package.json', size: 100, isText: true, content: '{"scripts":{"dev":"vite"}}' },
             { path: 'src/App.tsx', size: 100, isText: true, content: 'export function App() { return null; }' },
           ],
-          summary: 'FILE: package.json\n{"scripts":{"dev":"vite"}}',
+          summary: 'Project ZIP: audit-project.zip',
         }) ? 'pass' : 'fail',
         summary: 'Builder ZIP context memory check completed.',
-        details: ['Builder Mode must preserve ZIP file summaries so coding can continue from uploaded contents.'],
+        details: ['Builder Mode must preserve filtered ZIP summaries so coding can continue from uploaded contents.'],
       }),
     },
     {
@@ -167,7 +172,7 @@ export function createLiveAuditChecks(): AuditCheck[] {
           status: 'draft',
         }) ? 'pass' : 'fail',
         summary: 'Builder draft change memory check completed.',
-        details: ['Draft changes are the review buffer before any file save bridge writes to disk.'],
+        details: ['Draft changes are the review buffer before any file operation bridge applies changes.'],
       }),
     },
     {
@@ -184,6 +189,23 @@ export function createLiveAuditChecks(): AuditCheck[] {
           details: ['Accept/reject state must remain stable for reviewable code changes.'],
         };
       },
+    },
+    {
+      id: 'builder-review-bundle-memory',
+      label: 'Builder accepted bundle memory',
+      area: 'Builder Drill',
+      description: 'Verifies accepted changes can be grouped into a review bundle.',
+      run: () => ({
+        status: canStoreJson('wolfellama.audit.builder.bundle', {
+          projectName: 'audit-project.zip',
+          generatedAt: new Date().toISOString(),
+          changes: [
+            { filePath: 'src/App.tsx', summary: 'accepted audit change', after: 'export default function App() { return null; }', status: 'accepted' },
+          ],
+        }) ? 'pass' : 'fail',
+        summary: 'Builder accepted bundle check completed.',
+        details: ['Accepted changes can be grouped for copy, review, and later local apply flow.'],
+      }),
     },
     {
       id: 'builder-route-active-ui',
@@ -218,7 +240,7 @@ export function createLiveAuditChecks(): AuditCheck[] {
       run: () => ({
         status: hasBridge('projectFiles') ? 'pass' : 'warn',
         summary: 'Project file API check completed.',
-        details: ['ZIP reading can work without this.', 'Saving files to disk needs this API.'],
+        details: ['ZIP reading and accepted bundles can work without this.', 'Applying changes locally needs this API.'],
       }),
     },
   ];
