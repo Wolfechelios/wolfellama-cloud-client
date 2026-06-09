@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { DragEvent, useEffect, useState } from 'react';
 import { createBuilderTask, loadBuilderTask, saveBuilderTask } from '../../builder/builderMemory';
-import type { BuilderFileChange, BuilderTask } from '../../builder/builderTypes';
+import type { BuilderFileChange, BuilderTask, BuilderZipContext } from '../../builder/builderTypes';
+import { readZipProject } from '../../builder/zipProjectReader';
 
 interface BuilderPanelProps {
   onSendToChat: (text: string) => void;
@@ -27,6 +28,7 @@ export function BuilderPanel({ onSendToChat, activeModel, modelOptions, provider
   const [changeSummary, setChangeSummary] = useState('Describe the intended change.');
   const [afterContent, setAfterContent] = useState('');
   const [builderModel, setBuilderModel] = useState(() => getSavedBuilderModel(activeModel));
+  const [zipStatus, setZipStatus] = useState('No ZIP loaded yet.');
 
   useEffect(() => {
     saveBuilderTask(task);
@@ -49,10 +51,53 @@ export function BuilderPanel({ onSendToChat, activeModel, modelOptions, provider
 
   function clearTask() {
     setTask(undefined);
+    setZipStatus('No ZIP loaded yet.');
+  }
+
+  async function attachZip(file: File) {
+    if (!file.name.toLowerCase().endsWith('.zip')) {
+      setZipStatus('Only .zip files are supported here.');
+      return;
+    }
+
+    setZipStatus(`Reading ${file.name}...`);
+    try {
+      const zipContext = await readZipProject(file);
+      const currentTask = task ?? createBuilderTask(goal.trim() || `Continue coding from ${file.name}`);
+      const nextTask = updateTask({
+        ...currentTask,
+        projectName: zipContext.name,
+        zipContext: zipContext as BuilderZipContext,
+        notes: [
+          ...currentTask.notes,
+          `Loaded ZIP ${zipContext.name} with ${zipContext.fileCount} files and ${zipContext.textFileCount} text-like files.`,
+        ],
+      });
+      setTask(nextTask);
+      setGoal('');
+      setZipStatus(`Loaded ${zipContext.name}: ${zipContext.fileCount} files, ${zipContext.textFileCount} text-like files.`);
+    } catch (error) {
+      setZipStatus(error instanceof Error ? error.message : 'Could not read ZIP file.');
+    }
+  }
+
+  function handleDrop(event: DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    const file = event.dataTransfer.files.item(0);
+    if (file) void attachZip(file);
   }
 
   function askAiForPlan(currentTask: BuilderTask) {
-    onSendToChat(`Use this model as the Builder Mode model: ${builderModel}\nProvider: ${providerName}\n\nYou are Builder Mode for WolfeLlama. Build or fix this app request:\n\n${currentTask.goal}\n\nReturn a practical plan, likely files to edit, and a safe patch strategy. Do not save files yet. Show changes for review first.`);
+    const zipText = currentTask.zipContext
+      ? `\n\nZIP PROJECT CONTEXT:\nName: ${currentTask.zipContext.name}\nFiles: ${currentTask.zipContext.fileCount}\nText-like files: ${currentTask.zipContext.textFileCount}\n\nEXTRACTED IMPORTANT FILES:\n${currentTask.zipContext.summary}`
+      : '';
+
+    onSendToChat(`Use this model as the Builder Mode model: ${builderModel}\nProvider: ${providerName}\n\nYou are Builder Mode for WolfeLlama. Continue coding from the uploaded project context when available.\n\nBuild or fix this request:\n\n${currentTask.goal}${zipText}\n\nReturn a practical plan, likely files to edit, and proposed file changes. Do not assume missing files. Do not save files yet. Show changes for review first.`);
+  }
+
+  function askAiToContinueFromZip(currentTask: BuilderTask) {
+    if (!currentTask.zipContext) return;
+    onSendToChat(`Use this model as the Builder Mode model: ${builderModel}\nProvider: ${providerName}\n\nI uploaded this ZIP project into Builder Mode. Continue coding based on what is inside.\n\nProject: ${currentTask.zipContext.name}\nFiles: ${currentTask.zipContext.fileCount}\nText-like files: ${currentTask.zipContext.textFileCount}\n\nImportant extracted files:\n${currentTask.zipContext.summary}\n\nTell me what the app is, what framework it uses, what files matter first, and what you would change next.`);
   }
 
   function addDraftChange(currentTask: BuilderTask) {
@@ -89,7 +134,7 @@ export function BuilderPanel({ onSendToChat, activeModel, modelOptions, provider
         <div>
           <p className="eyebrow">AI app builder</p>
           <h3>Builder Mode</h3>
-          <p>Describe what to build, choose the model to build with, review proposed file changes, then send changes to chat for AI help.</p>
+          <p>Drop a ZIP, choose a build model, continue coding from the files inside, and review proposed changes.</p>
         </div>
         <div className="hardware-badge">{task ? 'active build' : 'ready'}</div>
       </div>
@@ -107,10 +152,22 @@ export function BuilderPanel({ onSendToChat, activeModel, modelOptions, provider
         <p>Provider: {providerName} • Builder model: {builderModel || activeModel}</p>
       </div>
 
+      <div className="builder-zip-drop" onDragOver={(event) => event.preventDefault()} onDrop={handleDrop}>
+        <h4>Drop ZIP Project Here</h4>
+        <p>{zipStatus}</p>
+        <label>
+          Choose ZIP file
+          <input type="file" accept=".zip,application/zip" onChange={(event) => {
+            const file = event.target.files?.item(0);
+            if (file) void attachZip(file);
+          }} />
+        </label>
+      </div>
+
       <div className="builder-goal-card">
         <label>
           What do you want to build or fix?
-          <textarea value={goal} onChange={(event) => setGoal(event.target.value)} placeholder="Example: Add a project file editor with diff preview and save button." />
+          <textarea value={goal} onChange={(event) => setGoal(event.target.value)} placeholder="Example: Continue this uploaded ZIP project and add a file editor with diff preview." />
         </label>
         <button type="button" className="connect-button" onClick={startTask}>Start Builder Task</button>
       </div>
@@ -118,7 +175,7 @@ export function BuilderPanel({ onSendToChat, activeModel, modelOptions, provider
       {!task ? (
         <div className="builder-empty-card">
           <h4>No active build task</h4>
-          <p>Start with a goal. Builder Mode will organize the plan and proposed file changes.</p>
+          <p>Drop a ZIP or start with a goal. Builder Mode will organize the plan and proposed file changes.</p>
         </div>
       ) : (
         <div className="builder-layout">
@@ -127,6 +184,7 @@ export function BuilderPanel({ onSendToChat, activeModel, modelOptions, provider
               <div>
                 <h4>Goal</h4>
                 <p>{task.goal}</p>
+                {task.zipContext && <p>ZIP: {task.zipContext.name} • {task.zipContext.fileCount} files</p>}
               </div>
               <button type="button" className="ghost-button" onClick={clearTask}>Clear</button>
             </div>
@@ -138,8 +196,21 @@ export function BuilderPanel({ onSendToChat, activeModel, modelOptions, provider
               </ol>
             </div>
 
+            {task.zipContext && (
+              <div className="builder-zip-summary">
+                <h4>ZIP Files</h4>
+                <p>{task.zipContext.textFileCount} text-like files detected. Showing first {Math.min(task.zipContext.files.length, 30)} files.</p>
+                <div>
+                  {task.zipContext.files.slice(0, 30).map((file) => (
+                    <span key={file.path}>{file.path}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="hardware-actions">
               <button type="button" className="connect-button" onClick={() => askAiForPlan(task)}>Ask AI For Build Plan</button>
+              {task.zipContext && <button type="button" className="ghost-button" onClick={() => askAiToContinueFromZip(task)}>Continue From ZIP</button>}
             </div>
           </div>
 
