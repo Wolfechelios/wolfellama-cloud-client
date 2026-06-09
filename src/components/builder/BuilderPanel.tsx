@@ -21,6 +21,10 @@ function updateTask(task: BuilderTask): BuilderTask {
   return { ...task, updatedAt: new Date().toISOString() };
 }
 
+function buildZipContextText(zipContext: BuilderZipContext) {
+  return `PROJECT INTAKE SUMMARY\n${zipContext.summary}`;
+}
+
 export function BuilderPanel({ onSendToChat, activeModel, modelOptions, providerName }: BuilderPanelProps) {
   const [goal, setGoal] = useState('');
   const [task, setTask] = useState<BuilderTask | undefined>(() => loadBuilderTask());
@@ -70,12 +74,12 @@ export function BuilderPanel({ onSendToChat, activeModel, modelOptions, provider
         zipContext: zipContext as BuilderZipContext,
         notes: [
           ...currentTask.notes,
-          `Loaded ZIP ${zipContext.name} with ${zipContext.fileCount} files and ${zipContext.textFileCount} text-like files.`,
+          `Loaded ${zipContext.name}. Framework: ${zipContext.framework}. Ignored ${zipContext.ignoredCount} generated/dependency files.`,
         ],
       });
       setTask(nextTask);
       setGoal('');
-      setZipStatus(`Loaded ${zipContext.name}: ${zipContext.fileCount} files, ${zipContext.textFileCount} text-like files.`);
+      setZipStatus(`Loaded ${zipContext.name}: ${zipContext.framework}, ${zipContext.fileCount} usable files, ignored ${zipContext.ignoredCount} junk/dependency files.`);
     } catch (error) {
       setZipStatus(error instanceof Error ? error.message : 'Could not read ZIP file.');
     }
@@ -88,16 +92,14 @@ export function BuilderPanel({ onSendToChat, activeModel, modelOptions, provider
   }
 
   function askAiForPlan(currentTask: BuilderTask) {
-    const zipText = currentTask.zipContext
-      ? `\n\nZIP PROJECT CONTEXT:\nName: ${currentTask.zipContext.name}\nFiles: ${currentTask.zipContext.fileCount}\nText-like files: ${currentTask.zipContext.textFileCount}\n\nEXTRACTED IMPORTANT FILES:\n${currentTask.zipContext.summary}`
-      : '';
+    const zipText = currentTask.zipContext ? `\n\n${buildZipContextText(currentTask.zipContext)}` : '';
 
-    onSendToChat(`Use this model as the Builder Mode model: ${builderModel}\nProvider: ${providerName}\n\nYou are Builder Mode for WolfeLlama. Continue coding from the uploaded project context when available.\n\nBuild or fix this request:\n\n${currentTask.goal}${zipText}\n\nReturn a practical plan, likely files to edit, and proposed file changes. Do not assume missing files. Do not save files yet. Show changes for review first.`);
+    onSendToChat(`Use this model as the Builder Mode model: ${builderModel}\nProvider: ${providerName}\n\nYou are Builder Mode for WolfeLlama. Continue coding from the filtered project intake summary when available.\n\nBuild or fix this request:\n\n${currentTask.goal}${zipText}\n\nReturn a practical plan, likely files to edit, and proposed file changes. Do not assume missing files. Do not save files yet. Show changes for review first.`);
   }
 
   function askAiToContinueFromZip(currentTask: BuilderTask) {
     if (!currentTask.zipContext) return;
-    onSendToChat(`Use this model as the Builder Mode model: ${builderModel}\nProvider: ${providerName}\n\nI uploaded this ZIP project into Builder Mode. Continue coding based on what is inside.\n\nProject: ${currentTask.zipContext.name}\nFiles: ${currentTask.zipContext.fileCount}\nText-like files: ${currentTask.zipContext.textFileCount}\n\nImportant extracted files:\n${currentTask.zipContext.summary}\n\nTell me what the app is, what framework it uses, what files matter first, and what you would change next.`);
+    onSendToChat(`Use this model as the Builder Mode model: ${builderModel}\nProvider: ${providerName}\n\nI uploaded this ZIP project into Builder Mode. Continue coding based on the filtered project intake only. Do not use ignored dependency/generated folders as app source.\n\n${buildZipContextText(currentTask.zipContext)}\n\nTell me what the app is, what framework it uses, what files matter first, and what you would change next.`);
   }
 
   function addDraftChange(currentTask: BuilderTask) {
@@ -134,7 +136,7 @@ export function BuilderPanel({ onSendToChat, activeModel, modelOptions, provider
         <div>
           <p className="eyebrow">AI app builder</p>
           <h3>Builder Mode</h3>
-          <p>Drop a ZIP, choose a build model, continue coding from the files inside, and review proposed changes.</p>
+          <p>Drop a ZIP, choose a build model, continue coding from filtered source files, and review proposed changes.</p>
         </div>
         <div className="hardware-badge">{task ? 'active build' : 'ready'}</div>
       </div>
@@ -184,7 +186,7 @@ export function BuilderPanel({ onSendToChat, activeModel, modelOptions, provider
               <div>
                 <h4>Goal</h4>
                 <p>{task.goal}</p>
-                {task.zipContext && <p>ZIP: {task.zipContext.name} • {task.zipContext.fileCount} files</p>}
+                {task.zipContext && <p>ZIP: {task.zipContext.name} • {task.zipContext.framework} • root: {task.zipContext.rootPath || 'zip root'}</p>}
               </div>
               <button type="button" className="ghost-button" onClick={clearTask}>Clear</button>
             </div>
@@ -198,8 +200,10 @@ export function BuilderPanel({ onSendToChat, activeModel, modelOptions, provider
 
             {task.zipContext && (
               <div className="builder-zip-summary">
-                <h4>ZIP Files</h4>
-                <p>{task.zipContext.textFileCount} text-like files detected. Showing first {Math.min(task.zipContext.files.length, 30)} files.</p>
+                <h4>Filtered Project Intake</h4>
+                <p>Framework: {task.zipContext.framework} • Package manager: {task.zipContext.packageManager}</p>
+                <p>Usable files: {task.zipContext.fileCount} • Text-like files: {task.zipContext.textFileCount} • Ignored: {task.zipContext.ignoredCount}</p>
+                <p>Ignored folders: {task.zipContext.ignoredFolders.map((item) => `${item.folder} (${item.count})`).join(', ') || 'none'}</p>
                 <div>
                   {task.zipContext.files.slice(0, 30).map((file) => (
                     <span key={file.path}>{file.path}</span>
