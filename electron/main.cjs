@@ -9,8 +9,7 @@ function getRendererEntry() {
     return process.env.ELECTRON_DEV_SERVER_URL;
   }
 
-  const packagedIndex = path.join(__dirname, '..', 'dist', 'index.html');
-  return packagedIndex;
+  return path.join(__dirname, '..', 'dist', 'index.html');
 }
 
 function showStartupFailure(error) {
@@ -30,10 +29,9 @@ function createMainWindow() {
     show: false,
     backgroundColor: '#0b1020',
     webPreferences: {
-      preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false
+      sandbox: true
     }
   });
 
