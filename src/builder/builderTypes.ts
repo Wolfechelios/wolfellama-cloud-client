@@ -9,10 +9,25 @@ export interface BuilderFileChange {
   status: BuilderChangeStatus;
 }
 
+export interface BuilderZipContext {
+  name: string;
+  size: number;
+  fileCount: number;
+  textFileCount: number;
+  files: Array<{
+    path: string;
+    size: number;
+    isText: boolean;
+    content?: string;
+  }>;
+  summary: string;
+}
+
 export interface BuilderTask {
   id: string;
   goal: string;
   projectName?: string;
+  zipContext?: BuilderZipContext;
   plan: string[];
   changes: BuilderFileChange[];
   notes: string[];
