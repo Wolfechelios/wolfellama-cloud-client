@@ -1,5 +1,6 @@
 import { DragEvent, useEffect, useState } from 'react';
 import { createBuilderTask, loadBuilderTask, saveBuilderTask } from '../../builder/builderMemory';
+import { createPatchExportText } from '../../builder/patchExport';
 import type { BuilderFileChange, BuilderTask, BuilderZipContext } from '../../builder/builderTypes';
 import { readZipProject } from '../../builder/zipProjectReader';
 
@@ -33,6 +34,7 @@ export function BuilderPanel({ onSendToChat, activeModel, modelOptions, provider
   const [afterContent, setAfterContent] = useState('');
   const [builderModel, setBuilderModel] = useState(() => getSavedBuilderModel(activeModel));
   const [zipStatus, setZipStatus] = useState('No ZIP loaded yet.');
+  const [reviewStatus, setReviewStatus] = useState('No accepted review bundle yet.');
 
   useEffect(() => {
     saveBuilderTask(task);
@@ -56,6 +58,7 @@ export function BuilderPanel({ onSendToChat, activeModel, modelOptions, provider
   function clearTask() {
     setTask(undefined);
     setZipStatus('No ZIP loaded yet.');
+    setReviewStatus('No accepted review bundle yet.');
   }
 
   async function attachZip(file: File) {
@@ -126,8 +129,33 @@ export function BuilderPanel({ onSendToChat, activeModel, modelOptions, provider
     );
   }
 
+  function acceptedCount(currentTask: BuilderTask) {
+    return currentTask.changes.filter((change) => change.status === 'accepted').length;
+  }
+
+  function copyAcceptedReviewBundle(currentTask: BuilderTask) {
+    const count = acceptedCount(currentTask);
+    if (!count) {
+      setReviewStatus('No accepted changes to copy.');
+      return;
+    }
+
+    void navigator.clipboard?.writeText(createPatchExportText(currentTask));
+    setReviewStatus(`Copied ${count} accepted change${count === 1 ? '' : 's'} as a review bundle.`);
+  }
+
+  function sendAcceptedReviewBundle(currentTask: BuilderTask) {
+    const count = acceptedCount(currentTask);
+    if (!count) {
+      setReviewStatus('No accepted changes to send.');
+      return;
+    }
+
+    onSendToChat(`Use this model as the Builder Mode model: ${builderModel}\nProvider: ${providerName}\n\nReview this accepted Builder Mode change bundle. Tell me the safest order, what tests to run, and whether anything is missing.\n\n${createPatchExportText(currentTask)}`);
+  }
+
   function sendChangeToChat(change: BuilderFileChange) {
-    onSendToChat(`Use this model as the Builder Mode model: ${builderModel}\nProvider: ${providerName}\n\nReview this proposed file change for ${change.filePath}:\n\nSummary: ${change.summary}\n\nProposed content:\n\n\`\`\`\n${change.after}\n\`\`\`\n\nTell me if this is safe, what it changes, and whether anything else must be updated.`);
+    onSendToChat(`Use this model as the Builder Mode model: ${builderModel}\nProvider: ${providerName}\n\nReview this proposed file change for ${change.filePath}:\n\nSummary: ${change.summary}\n\nProposed content:\n\n${change.after}\n\nTell me if this is safe, what it changes, and whether anything else must be updated.`);
   }
 
   return (
@@ -136,7 +164,7 @@ export function BuilderPanel({ onSendToChat, activeModel, modelOptions, provider
         <div>
           <p className="eyebrow">AI app builder</p>
           <h3>Builder Mode</h3>
-          <p>Drop a ZIP, choose a build model, continue coding from filtered source files, and review proposed changes.</p>
+          <p>Drop a ZIP, choose a build model, continue coding from filtered source files, and review accepted bundles.</p>
         </div>
         <div className="hardware-badge">{task ? 'active build' : 'ready'}</div>
       </div>
@@ -215,7 +243,10 @@ export function BuilderPanel({ onSendToChat, activeModel, modelOptions, provider
             <div className="hardware-actions">
               <button type="button" className="connect-button" onClick={() => askAiForPlan(task)}>Ask AI For Build Plan</button>
               {task.zipContext && <button type="button" className="ghost-button" onClick={() => askAiToContinueFromZip(task)}>Continue From ZIP</button>}
+              <button type="button" className="ghost-button" onClick={() => copyAcceptedReviewBundle(task)}>Copy Accepted Bundle</button>
+              <button type="button" className="ghost-button" onClick={() => sendAcceptedReviewBundle(task)}>Send Accepted Bundle</button>
             </div>
+            <p>{reviewStatus}</p>
           </div>
 
           <div className="builder-task-card">
@@ -230,7 +261,7 @@ export function BuilderPanel({ onSendToChat, activeModel, modelOptions, provider
             </label>
             <label>
               Proposed content
-              <textarea value={afterContent} onChange={(event) => setAfterContent(event.target.value)} placeholder="Paste proposed file content or AI patch here." />
+              <textarea value={afterContent} onChange={(event) => setAfterContent(event.target.value)} placeholder="Paste proposed file content or AI change here." />
             </label>
             <button type="button" className="ghost-button" onClick={() => addDraftChange(task)}>Add Draft Change</button>
           </div>
