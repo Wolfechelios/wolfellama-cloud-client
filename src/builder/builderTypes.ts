@@ -9,11 +9,21 @@ export interface BuilderFileChange {
   status: BuilderChangeStatus;
 }
 
+export interface BuilderIgnoredFolder {
+  folder: string;
+  count: number;
+}
+
 export interface BuilderZipContext {
   name: string;
   size: number;
+  rootPath: string;
+  framework: string;
+  packageManager: string;
   fileCount: number;
   textFileCount: number;
+  ignoredCount: number;
+  ignoredFolders: BuilderIgnoredFolder[];
   files: Array<{
     path: string;
     size: number;
