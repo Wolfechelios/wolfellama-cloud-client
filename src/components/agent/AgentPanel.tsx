@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { codingAgentCapabilities, codingAgentOrchestrationRoles } from '../../agent/codingAgentCapabilities';
 import { createAgentTask, markAgentBlocked, runNextAgentStep } from '../../agent/agentRunner';
 import type { AgentRuntimeContext, AgentTask } from '../../agent/agentTypes';
 import { clearAgentTask, loadAgentTask, saveAgentTask } from '../../agent/taskMemory';
@@ -47,13 +48,42 @@ export function AgentPanel({ context }: AgentPanelProps) {
         <div>
           <p className="eyebrow">Delegation workspace</p>
           <h3>Agent Mode</h3>
-          <p>Plan larger tasks, advance step by step, and resume progress after reload.</p>
+          <p>Plan larger tasks, track coding-agent capabilities, advance step by step, and resume progress after reload.</p>
         </div>
         <div className="hardware-badge">{task?.status ?? 'idle'}</div>
       </div>
 
       <div className="agent-context-card">
         <strong>Active model:</strong> {context.providerName} / {context.model} / {context.mode}
+      </div>
+
+      <div className="agent-capability-grid">
+        {codingAgentCapabilities.map((capability) => (
+          <article key={capability.id} className={`agent-capability-card ${capability.status}`}>
+            <div className="repo-project-header">
+              <h4>{capability.title}</h4>
+              <span>{capability.status}</span>
+            </div>
+            <p>{capability.summary}</p>
+            <strong>Current support</strong>
+            <ul>
+              {capability.currentSupport.map((item) => <li key={item}>{item}</li>)}
+            </ul>
+            <strong>Next pass</strong>
+            <ul>
+              {capability.nextPass.map((item) => <li key={item}>{item}</li>)}
+            </ul>
+          </article>
+        ))}
+      </div>
+
+      <div className="agent-log-card">
+        <h4>Agentic orchestration roles</h4>
+        {codingAgentOrchestrationRoles.map((role) => (
+          <p key={role.role}>
+            <span>{role.role}</span> {role.job}
+          </p>
+        ))}
       </div>
 
       <label>
