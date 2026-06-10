@@ -1,4 +1,4 @@
-import { DragEvent, useEffect, useState } from 'react';
+import { DragEvent, useEffect, useMemo, useState } from 'react';
 import { createBuilderTask, loadBuilderTask, saveBuilderTask } from '../../builder/builderMemory';
 import { createPatchExportText } from '../../builder/patchExport';
 import type { BuilderFileChange, BuilderTask, BuilderZipContext } from '../../builder/builderTypes';
@@ -13,9 +13,21 @@ interface BuilderPanelProps {
 
 const BUILDER_MODEL_KEY = 'wolfellama.builder.model';
 
+const BUILDER_MODEL_PRESETS = [
+  'qwen2.5-coder:7b',
+  'deepseek-coder:6.7b',
+  'codellama:7b',
+  'llama3.1:8b',
+  'reefer/monica:latest',
+];
+
 function getSavedBuilderModel(fallback: string) {
   if (typeof window === 'undefined') return fallback;
   return window.localStorage.getItem(BUILDER_MODEL_KEY) ?? fallback;
+}
+
+function uniqueModels(models: string[]) {
+  return models.map((model) => model.trim()).filter((model, index, list) => model && list.indexOf(model) === index);
 }
 
 function updateTask(task: BuilderTask): BuilderTask {
@@ -36,17 +48,28 @@ export function BuilderPanel({ onSendToChat, activeModel, modelOptions, provider
   const [zipStatus, setZipStatus] = useState('No ZIP loaded yet.');
   const [reviewStatus, setReviewStatus] = useState('No accepted review bundle yet.');
 
+  const builderModelOptions = useMemo(
+    () => uniqueModels([builderModel, activeModel, ...modelOptions, ...BUILDER_MODEL_PRESETS]),
+    [activeModel, builderModel, modelOptions],
+  );
+
+  const effectiveBuilderModel = builderModel || activeModel;
+
   useEffect(() => {
     saveBuilderTask(task);
   }, [task]);
 
   useEffect(() => {
-    window.localStorage.setItem(BUILDER_MODEL_KEY, builderModel);
-  }, [builderModel]);
+    window.localStorage.setItem(BUILDER_MODEL_KEY, effectiveBuilderModel);
+  }, [effectiveBuilderModel]);
 
   useEffect(() => {
     if (!builderModel && activeModel) setBuilderModel(activeModel);
   }, [activeModel, builderModel]);
+
+  function selectBuilderModel(nextModel: string) {
+    setBuilderModel(nextModel);
+  }
 
   function startTask() {
     const trimmed = goal.trim();
@@ -97,12 +120,12 @@ export function BuilderPanel({ onSendToChat, activeModel, modelOptions, provider
   function askAiForPlan(currentTask: BuilderTask) {
     const zipText = currentTask.zipContext ? `\n\n${buildZipContextText(currentTask.zipContext)}` : '';
 
-    onSendToChat(`Use this model as the Builder Mode model: ${builderModel}\nProvider: ${providerName}\n\nYou are Builder Mode for WolfeLlama. Continue coding from the filtered project intake summary when available.\n\nBuild or fix this request:\n\n${currentTask.goal}${zipText}\n\nReturn a practical plan, likely files to edit, and proposed file changes. Do not assume missing files. Do not save files yet. Show changes for review first.`);
+    onSendToChat(`Use this model as the Builder Mode model: ${effectiveBuilderModel}\nProvider: ${providerName}\n\nYou are Builder Mode for WolfeLlama. Continue coding from the filtered project intake summary when available.\n\nBuild or fix this request:\n\n${currentTask.goal}${zipText}\n\nReturn a practical plan, likely files to edit, and proposed file changes. Do not assume missing files. Do not save files yet. Show changes for review first.`);
   }
 
   function askAiToContinueFromZip(currentTask: BuilderTask) {
     if (!currentTask.zipContext) return;
-    onSendToChat(`Use this model as the Builder Mode model: ${builderModel}\nProvider: ${providerName}\n\nI uploaded this ZIP project into Builder Mode. Continue coding based on the filtered project intake only. Do not use ignored dependency/generated folders as app source.\n\n${buildZipContextText(currentTask.zipContext)}\n\nTell me what the app is, what framework it uses, what files matter first, and what you would change next.`);
+    onSendToChat(`Use this model as the Builder Mode model: ${effectiveBuilderModel}\nProvider: ${providerName}\n\nI uploaded this ZIP project into Builder Mode. Continue coding based on the filtered project intake only. Do not use ignored dependency/generated folders as app source.\n\n${buildZipContextText(currentTask.zipContext)}\n\nTell me what the app is, what framework it uses, what files matter first, and what you would change next.`);
   }
 
   function addDraftChange(currentTask: BuilderTask) {
@@ -151,11 +174,11 @@ export function BuilderPanel({ onSendToChat, activeModel, modelOptions, provider
       return;
     }
 
-    onSendToChat(`Use this model as the Builder Mode model: ${builderModel}\nProvider: ${providerName}\n\nReview this accepted Builder Mode change bundle. Tell me the safest order, what tests to run, and whether anything is missing.\n\n${createPatchExportText(currentTask)}`);
+    onSendToChat(`Use this model as the Builder Mode model: ${effectiveBuilderModel}\nProvider: ${providerName}\n\nReview this accepted Builder Mode change bundle. Tell me the safest order, what tests to run, and whether anything is missing.\n\n${createPatchExportText(currentTask)}`);
   }
 
   function sendChangeToChat(change: BuilderFileChange) {
-    onSendToChat(`Use this model as the Builder Mode model: ${builderModel}\nProvider: ${providerName}\n\nReview this proposed file change for ${change.filePath}:\n\nSummary: ${change.summary}\n\nProposed content:\n\n${change.after}\n\nTell me if this is safe, what it changes, and whether anything else must be updated.`);
+    onSendToChat(`Use this model as the Builder Mode model: ${effectiveBuilderModel}\nProvider: ${providerName}\n\nReview this proposed file change for ${change.filePath}:\n\nSummary: ${change.summary}\n\nProposed content:\n\n${change.after}\n\nTell me if this is safe, what it changes, and whether anything else must be updated.`);
   }
 
   return (
@@ -172,14 +195,28 @@ export function BuilderPanel({ onSendToChat, activeModel, modelOptions, provider
       <div className="builder-model-card">
         <label>
           Builder model
-          <input list="builder-model-options" value={builderModel} onChange={(event) => setBuilderModel(event.target.value)} placeholder={activeModel} />
+          <select value={effectiveBuilderModel} onChange={(event) => selectBuilderModel(event.target.value)}>
+            {builderModelOptions.map((option) => (
+              <option key={option} value={option}>{option}</option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Manual model name
+          <input list="builder-model-options" value={effectiveBuilderModel} onChange={(event) => selectBuilderModel(event.target.value)} placeholder={activeModel} />
           <datalist id="builder-model-options">
-            {[builderModel, activeModel, ...modelOptions].filter(Boolean).map((option) => (
+            {builderModelOptions.map((option) => (
               <option key={option} value={option} />
             ))}
           </datalist>
         </label>
-        <p>Provider: {providerName} • Builder model: {builderModel || activeModel}</p>
+        <div className="hardware-actions">
+          <button type="button" className="ghost-button" onClick={() => selectBuilderModel(activeModel)}>Use chat model</button>
+          {builderModelOptions.slice(0, 5).map((option) => (
+            <button key={option} type="button" className="ghost-button" onClick={() => selectBuilderModel(option)}>{option}</button>
+          ))}
+        </div>
+        <p>Provider: {providerName} • Builder model: {effectiveBuilderModel}</p>
       </div>
 
       <div className="builder-zip-drop" onDragOver={(event) => event.preventDefault()} onDrop={handleDrop}>
