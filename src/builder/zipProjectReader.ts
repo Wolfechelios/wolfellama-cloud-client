@@ -26,6 +26,9 @@ export interface ZipProjectContext {
   summary: string;
 }
 
+const MAX_ZIP_BYTES = 700 * 1024 * 1024;
+const BROWSER_DEEP_READ_BYTES = 150 * 1024 * 1024;
+
 const TEXT_EXTENSIONS = new Set([
   '.ts', '.tsx', '.js', '.jsx', '.json', '.css', '.html', '.md', '.txt', '.env', '.example', '.yml', '.yaml', '.toml', '.py', '.rb', '.go', '.rs', '.java', '.kt', '.swift', '.php', '.sh', '.sql', '.xml', '.svg', '.vue', '.svelte',
 ]);
@@ -43,6 +46,12 @@ const PRIORITY_FILES = new Set([
 ]);
 
 const PRIORITY_DIRS = ['app/', 'src/', 'components/', 'screens/', 'navigation/', 'hooks/', 'lib/', 'utils/', 'constants/', 'assets/'];
+
+function formatFileSize(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
 
 function normalize(path: string) {
   return path.replace(/^\.\//, '').replace(/\/+/g, '/');
@@ -141,7 +150,41 @@ function ignoredFolderList(counts: Map<string, number>) {
     .sort((a, b) => b.count - a.count || a.folder.localeCompare(b.folder));
 }
 
+function largeZipContext(file: File): ZipProjectContext {
+  const summary = [
+    `Project ZIP: ${file.name}`,
+    `ZIP size: ${formatFileSize(file.size)}`,
+    'Large ZIP mode: accepted, but browser deep extraction is skipped to prevent tab freeze.',
+    `Deep browser extraction limit: ${formatFileSize(BROWSER_DEEP_READ_BYTES)}`,
+    `Hard ZIP ceiling: ${formatFileSize(MAX_ZIP_BYTES)}`,
+    'Next step: use a clean source-only ZIP under the deep extraction limit, or use the future desktop/worker intake path for full 700 MB parsing.',
+    'Recommended exclusions: node_modules, .expo, .git, dist, build, coverage, .next, .turbo, .cache.',
+  ].join('\n');
+
+  return {
+    name: file.name,
+    size: file.size,
+    rootPath: '',
+    framework: 'large ZIP pending deep intake',
+    packageManager: 'unknown',
+    fileCount: 0,
+    textFileCount: 0,
+    ignoredCount: 0,
+    ignoredFolders: [],
+    files: [],
+    summary,
+  };
+}
+
 export async function readZipProject(file: File): Promise<ZipProjectContext> {
+  if (file.size > MAX_ZIP_BYTES) {
+    throw new Error(`ZIP is ${formatFileSize(file.size)}. Builder Mode allows up to ${formatFileSize(MAX_ZIP_BYTES)}.`);
+  }
+
+  if (file.size > BROWSER_DEEP_READ_BYTES) {
+    return largeZipContext(file);
+  }
+
   const buffer = new Uint8Array(await file.arrayBuffer());
   const entries = unzipSync(buffer);
   const rawPaths = Object.keys(entries).map(normalize).filter((path) => !path.endsWith('/'));
@@ -182,6 +225,7 @@ export async function readZipProject(file: File): Promise<ZipProjectContext> {
 
   const projectOverview = [
     `Project ZIP: ${file.name}`,
+    `ZIP size: ${formatFileSize(file.size)}`,
     `Detected root: ${rootPath || '(zip root)'}`,
     `Detected framework: ${framework}`,
     `Detected package manager: ${packageManager}`,
