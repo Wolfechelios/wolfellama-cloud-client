@@ -81,16 +81,18 @@ input:focus, select:focus, textarea:focus { border-color: rgba(65,190,255,.65); 
 
 .repo-runner-url-row { display: grid; grid-template-columns: 1fr auto; gap: 14px; align-items: end; }
 .repo-runner-layout { display: grid; grid-template-columns: 280px 1fr; gap: 18px; }
-.repo-library-card, .repo-project-card, .repo-env-card, .repo-log-card { border: 1px solid rgba(255,255,255,.08); border-radius: 18px; background: rgba(255,255,255,.04); padding: 16px; }
+.repo-library-card, .repo-project-card, .repo-env-card, .repo-log-card, .github-editor-card { border: 1px solid rgba(255,255,255,.08); border-radius: 18px; background: rgba(255,255,255,.04); padding: 16px; }
 .repo-library-card { display: flex; flex-direction: column; gap: 10px; align-self: start; }
 .repo-library-card button { display: grid; gap: 5px; }
-.repo-library-card span, .repo-project-card p, .repo-env-card p, .repo-log-card p { color: #96a7bb; }
+.repo-library-card span, .repo-project-card p, .repo-env-card p, .repo-log-card p, .github-editor-card p { color: #96a7bb; }
 .repo-project-card { display: grid; gap: 16px; }
 .repo-project-header { display: flex; justify-content: space-between; gap: 14px; align-items: flex-start; }
 .repo-facts-grid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 10px; }
 .repo-facts-grid span { border: 1px solid rgba(65,190,255,.18); border-radius: 14px; background: rgba(65,190,255,.08); color: #b9e5ff; padding: 12px; overflow-wrap: anywhere; }
-.repo-env-card { display: grid; gap: 12px; }
+.repo-env-card, .github-editor-card { display: grid; gap: 12px; }
 .repo-env-row { display: grid; grid-template-columns: 1fr 2fr; gap: 10px; }
+.github-editor-grid { display: grid; grid-template-columns: 2fr .8fr 1.2fr; gap: 10px; }
+.github-code-editor { min-height: 420px; resize: vertical; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; line-height: 1.45; tab-size: 2; }
 .repo-log-card { display: grid; gap: 12px; }
 .repo-log-card article { display: grid; gap: 6px; border-top: 1px solid rgba(255,255,255,.08); padding-top: 10px; }
 .repo-log-card code { color: #f5fbff; white-space: pre-wrap; overflow-wrap: anywhere; }
@@ -127,7 +129,7 @@ input:focus, select:focus, textarea:focus { border-color: rgba(65,190,255,.65); 
 .audit-debug-card pre { max-height: 560px; overflow: auto; margin: 0; border: 1px solid rgba(65,190,255,.18); border-radius: 14px; background: rgba(0,0,0,.26); color: #dff4ff; padding: 14px; white-space: pre-wrap; }
 
 @media (max-width: 1100px) {
-  .app-shell, .workspace, .control-grid, .hardware-grid, .local-provider-card, .repo-runner-url-row, .repo-runner-layout, .repo-facts-grid, .repo-env-row, .builder-layout, .audit-layout, .audit-summary-grid { grid-template-columns: 1fr; }
+  .app-shell, .workspace, .control-grid, .hardware-grid, .local-provider-card, .repo-runner-url-row, .repo-runner-layout, .repo-facts-grid, .repo-env-row, .github-editor-grid, .builder-layout, .audit-layout, .audit-summary-grid { grid-template-columns: 1fr; }
   .builder-changes-card { grid-column: auto; }
   .sidebar { display: none; }
 }
