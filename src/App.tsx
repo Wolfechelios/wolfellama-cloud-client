@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from 'react';
 import { AgentPanel } from './components/agent/AgentPanel';
 import { LiveAuditPanel } from './components/audit/LiveAuditPanel';
 import { BuilderPanel } from './components/builder/BuilderPanel';
@@ -20,6 +20,15 @@ interface ChatMessage {
   sendToModel?: boolean;
 }
 
+interface ChatAttachment {
+  id: string;
+  file: File;
+  name: string;
+  type: string;
+  size: number;
+  kind: 'image' | 'video' | 'audio' | 'zip' | 'document' | 'file';
+}
+
 const MEMORY_MESSAGES_KEY = 'wolfellama.messages';
 
 const starterMessages: ChatMessage[] = [
@@ -30,6 +39,8 @@ const starterMessages: ChatMessage[] = [
     content: 'WolfeLlama Cloud Client is ready. This welcome message is UI-only and is not sent to your model.',
   },
 ];
+
+const TEXT_ATTACHMENT_EXTENSIONS = new Set(['.txt', '.md', '.json', '.csv', '.ts', '.tsx', '.js', '.jsx', '.html', '.css', '.xml', '.yml', '.yaml', '.toml', '.env', '.sh', '.py']);
 
 function getSavedText(key: string, fallback: string) {
   if (typeof window === 'undefined') return fallback;
@@ -66,6 +77,67 @@ function getSavedMessages() {
   }
 }
 
+function formatFileSize(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function attachmentKind(file: File): ChatAttachment['kind'] {
+  if (file.type.startsWith('image/')) return 'image';
+  if (file.type.startsWith('video/')) return 'video';
+  if (file.type.startsWith('audio/')) return 'audio';
+  if (file.name.toLowerCase().endsWith('.zip')) return 'zip';
+  if (file.type.includes('pdf') || file.type.includes('document') || file.type.includes('text')) return 'document';
+  return 'file';
+}
+
+function extensionOf(name: string) {
+  const clean = name.toLowerCase();
+  const index = clean.lastIndexOf('.');
+  return index === -1 ? '' : clean.slice(index);
+}
+
+function canReadTextPreview(file: File) {
+  return file.size <= 80_000 && (file.type.startsWith('text/') || TEXT_ATTACHMENT_EXTENSIONS.has(extensionOf(file.name)));
+}
+
+async function buildAttachmentContext(attachments: ChatAttachment[]) {
+  if (!attachments.length) return '';
+
+  const lines: string[] = ['CHAT ATTACHMENTS:'];
+
+  for (const attachment of attachments) {
+    lines.push(`- ${attachment.name} | kind: ${attachment.kind} | type: ${attachment.type || 'unknown'} | size: ${formatFileSize(attachment.size)}`);
+
+    if (attachment.kind === 'zip') {
+      lines.push('  Note: ZIP attached in chat. Use Builder Mode ZIP intake for deep project parsing.');
+      continue;
+    }
+
+    if (attachment.kind === 'image') {
+      lines.push('  Note: Image attached. Current chat sends metadata; visual model support can inspect image content in a later pass.');
+      continue;
+    }
+
+    if (attachment.kind === 'video') {
+      lines.push('  Note: Video attached. Current chat sends metadata; video frame/audio extraction can be added in a later pass.');
+      continue;
+    }
+
+    if (canReadTextPreview(attachment.file)) {
+      try {
+        const text = await attachment.file.text();
+        lines.push(`  Text preview:\n${text.slice(0, 8000)}`);
+      } catch {
+        lines.push('  Text preview unavailable.');
+      }
+    }
+  }
+
+  return lines.join('\n');
+}
+
 function App() {
   const [activeView, setActiveView] = useState<ActiveView>('chat');
   const [providerId, setProviderId] = useState(() => getSavedText('wolfellama.providerId', 'ollama'));
@@ -85,6 +157,7 @@ function App() {
   const [pinnedModel, setPinnedModel] = useState(() => getSavedBool('wolfellama.pinnedModel', true));
   const [sendSystemPrompt, setSendSystemPrompt] = useState(() => getSavedBool('wolfellama.sendSystemPrompt', false));
   const [ollamaTerminalMode, setOllamaTerminalMode] = useState(() => getSavedBool('wolfellama.ollamaTerminalMode', true));
+  const [chatAttachments, setChatAttachments] = useState<ChatAttachment[]>([]);
 
   const selectedProvider = useMemo(
     () => providerOptions.find((provider) => provider.id === providerId) ?? providerOptions[0],
@@ -226,6 +299,7 @@ function App() {
   function handleNewChat() {
     setMessages(starterMessages);
     window.localStorage.removeItem(MEMORY_MESSAGES_KEY);
+    setChatAttachments([]);
     setStatusLabel('New chat');
   }
 
@@ -233,6 +307,28 @@ function App() {
     setMessages(starterMessages);
     window.localStorage.removeItem(MEMORY_MESSAGES_KEY);
     setStatusLabel('Memory cleared');
+  }
+
+  function handleAttachmentChange(event: ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(event.target.files ?? []);
+    if (!files.length) return;
+
+    setChatAttachments((current) => [
+      ...current,
+      ...files.map((file) => ({
+        id: crypto.randomUUID(),
+        file,
+        name: file.name,
+        type: file.type,
+        size: file.size,
+        kind: attachmentKind(file),
+      })),
+    ]);
+    event.target.value = '';
+  }
+
+  function removeAttachment(id: string) {
+    setChatAttachments((current) => current.filter((attachment) => attachment.id !== id));
   }
 
   function sendTextToChat(text: string) {
@@ -243,24 +339,29 @@ function App() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const trimmed = input.trim();
-    if (!trimmed || isBusy) return;
+    if ((!trimmed && !chatAttachments.length) || isBusy) return;
+
+    setIsBusy(true);
+
+    const attachmentContext = await buildAttachmentContext(chatAttachments);
+    const outboundText = [trimmed, attachmentContext].filter(Boolean).join('\n\n');
 
     const userMessage: ChatMessage = {
       id: crypto.randomUUID(),
       role: 'user',
-      content: trimmed,
+      content: outboundText,
     };
 
     setMessages((current) => [...current, userMessage]);
     setInput('');
-    setIsBusy(true);
+    setChatAttachments([]);
 
     try {
       if (providerId === 'ollama') {
         const response = effectiveTerminalMode
           ? await ollamaProvider.sendGenerate({
               model,
-              prompt: buildTerminalPrompt(trimmed),
+              prompt: buildTerminalPrompt(outboundText),
               temperature,
               maxOutputTokens: maxTokens,
             })
@@ -268,7 +369,7 @@ function App() {
               model,
               temperature,
               maxOutputTokens: maxTokens,
-              messages: buildProviderMessages(trimmed),
+              messages: buildProviderMessages(outboundText),
             });
 
         setStatusLabel('Ready');
@@ -285,7 +386,7 @@ function App() {
           model,
           temperature,
           maxOutputTokens: maxTokens,
-          messages: buildProviderMessages(trimmed),
+          messages: buildProviderMessages(outboundText),
         });
 
         setStatusLabel('Ready');
@@ -426,6 +527,7 @@ function App() {
           <h2>Live Now</h2>
           <span>Paste GitHub URL</span>
           <span>Builder ZIP intake</span>
+          <span>Chat uploads</span>
           <span>Builder model select</span>
           <span>No-gap audit</span>
           <span>Live debug stream</span>
@@ -478,7 +580,30 @@ function App() {
               <div className="chat-card">
                 <div className="chat-header"><div><h3>Chat</h3><p>{selectedProvider.description}</p></div><button type="button" className="ghost-button" onClick={handleClearMemory}>Clear Memory</button></div>
                 <div className="message-list">{messages.map((message) => <article key={message.id} className={`message ${message.role}`}><span>{message.role === 'user' ? 'You' : 'WolfeLlama'}</span><p>{message.content}</p></article>)}</div>
-                <form className="composer" onSubmit={handleSubmit}><textarea value={input} onChange={(event) => setInput(event.target.value)} placeholder={providerId === 'ollama' ? 'Ask your local Ollama model...' : `Ask ${selectedProvider.name}...`} /><button type="submit" disabled={isBusy}>{isBusy ? '...' : 'Send'}</button></form>
+                <form className="composer composer-with-upload" onSubmit={handleSubmit}>
+                  <div className="composer-input-stack">
+                    <textarea value={input} onChange={(event) => setInput(event.target.value)} placeholder={providerId === 'ollama' ? 'Ask your local Ollama model...' : `Ask ${selectedProvider.name}...`} />
+                    {chatAttachments.length > 0 && (
+                      <div className="attachment-tray">
+                        {chatAttachments.map((attachment) => (
+                          <span key={attachment.id} className={`attachment-chip ${attachment.kind}`}>
+                            <strong>{attachment.kind}</strong>
+                            {attachment.name}
+                            <small>{formatFileSize(attachment.size)}</small>
+                            <button type="button" onClick={() => removeAttachment(attachment.id)}>×</button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div className="composer-actions">
+                    <label className="upload-button">
+                      + Upload
+                      <input type="file" multiple accept="image/*,video/*,audio/*,.zip,.pdf,.txt,.md,.json,.csv,.ts,.tsx,.js,.jsx,.html,.css,.xml,.yml,.yaml,.py,.sh" onChange={handleAttachmentChange} />
+                    </label>
+                    <button type="submit" disabled={isBusy}>{isBusy ? '...' : 'Send'}</button>
+                  </div>
+                </form>
               </div>
 
               <aside className="settings-card">
