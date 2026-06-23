@@ -59,6 +59,10 @@ async function waitForPort(host, port, attempts = 30, timeoutMs = 400, delayMs =
 function attachProcessLogs(label, processRef, onExit) {
   processRef.stdout?.on('data', (data) => console.log(`[${label}] ${String(data).trim()}`));
   processRef.stderr?.on('data', (data) => console.log(`[${label}] ${String(data).trim()}`));
+  processRef.once('error', (error) => {
+    console.log(`[WolfeLlama] ${label} could not start: ${error && error.message ? error.message : String(error)}`);
+    onExit();
+  });
   processRef.once('exit', (code, signal) => {
     console.log(`[WolfeLlama] ${label} process exited code=${code ?? 'none'} signal=${signal ?? 'none'}`);
     onExit();
@@ -129,18 +133,22 @@ async function startOpenWebUIIfNeeded() {
       }
     });
 
+    let launchFailed = false;
     attachProcessLogs('OpenWebUI', openWebUIProcess, () => {
       openWebUIProcess = null;
+      launchFailed = true;
     });
 
-    if (await waitForPort(OPEN_WEBUI_HOST, OPEN_WEBUI_PORT, 60, 500, 500)) {
+    if (await waitForPort(OPEN_WEBUI_HOST, OPEN_WEBUI_PORT, 12, 250, 250)) {
       console.log(`[WolfeLlama] OpenWebUI started at http://${OPEN_WEBUI_HOST}:${OPEN_WEBUI_PORT}`);
       return;
     }
 
-    console.log(`[WolfeLlama] OpenWebUI start requested, but port ${OPEN_WEBUI_PORT} did not open yet.`);
+    if (!launchFailed) {
+      console.log(`[WolfeLlama] OpenWebUI not ready on port ${OPEN_WEBUI_PORT}; continuing with direct Ollama chat.`);
+    }
   } catch (error) {
-    console.log(`[WolfeLlama] Could not auto-start OpenWebUI. Install it with: pipx install open-webui or pip install open-webui. Error: ${error && error.message ? error.message : String(error)}`);
+    console.log(`[WolfeLlama] Could not auto-start OpenWebUI. Install it with: python3 -m pip install --upgrade open-webui. Error: ${error && error.message ? error.message : String(error)}`);
   }
 }
 
