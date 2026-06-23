@@ -11,26 +11,32 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "lint": "tsc --noEmit",
+    "check": "npm run lint",
     "desktop:check": "npm run build && node scripts/assert-desktop-build.cjs",
     "desktop:dev": "cross-env ELECTRON_DEV_SERVER_URL=http://127.0.0.1:5173 concurrently -k \"npm run dev\" \"wait-on http://127.0.0.1:5173 && electron .\"",
+    "desktop:dev:no-ollama-start": "cross-env WOLFELLAMA_SKIP_OLLAMA_START=1 ELECTRON_DEV_SERVER_URL=http://127.0.0.1:5173 concurrently -k \"npm run dev\" \"wait-on http://127.0.0.1:5173 && electron .\"",
     "desktop:pack": "npm run desktop:check && electron-builder --dir",
     "desktop:win": "npm run desktop:check && electron-builder --win nsis --x64",
     "desktop:win:portable": "npm run desktop:check && electron-builder --win portable --x64"
   },
   "dependencies": {
+    "fflate": "latest",
     "react": "latest",
     "react-dom": "latest",
-    "zustand": "latest",
-    "fflate": "latest"
+    "zustand": "latest"
   },
   "devDependencies": {
+    "@tailwindcss/postcss": "latest",
     "@types/react": "latest",
     "@types/react-dom": "latest",
     "@vitejs/plugin-react": "5.1.2",
+    "autoprefixer": "latest",
     "concurrently": "latest",
     "cross-env": "latest",
     "electron": "latest",
     "electron-builder": "latest",
+    "postcss": "latest",
+    "tailwindcss": "latest",
     "typescript": "latest",
     "vite": "5.4.21",
     "wait-on": "latest"
