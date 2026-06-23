@@ -94,7 +94,7 @@ function detectRoot(paths: string[]) {
 
   for (const path of paths) {
     const parts = path.split('/');
-    const name = parts.at(-1) ?? path;
+    const name = parts[parts.length - 1] ?? path;
     if (!ROOT_MARKERS.has(name)) continue;
 
     const root = parts.length > 1 ? parts.slice(0, -1).join('/') : '';
