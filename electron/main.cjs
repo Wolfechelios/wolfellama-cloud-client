@@ -1,8 +1,13 @@
 const { app, BrowserWindow, dialog, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const net = require('net');
+const { spawn } = require('child_process');
 
 const isDev = Boolean(process.env.ELECTRON_DEV_SERVER_URL);
+const OLLAMA_HOST = '127.0.0.1';
+const OLLAMA_PORT = 11434;
+let ollamaProcess = null;
 
 function getRendererEntry() {
   if (isDev) {
@@ -18,6 +23,69 @@ function showStartupFailure(error) {
     'WolfeLlama startup failed',
     `The desktop app could not start.\n\n${message}`
   );
+}
+
+function isPortOpen(host, port, timeoutMs = 600) {
+  return new Promise((resolve) => {
+    const socket = new net.Socket();
+    let settled = false;
+
+    function finish(value) {
+      if (settled) return;
+      settled = true;
+      socket.destroy();
+      resolve(value);
+    }
+
+    socket.setTimeout(timeoutMs);
+    socket.once('connect', () => finish(true));
+    socket.once('timeout', () => finish(false));
+    socket.once('error', () => finish(false));
+    socket.connect(port, host);
+  });
+}
+
+async function startOllamaIfNeeded() {
+  if (process.env.WOLFELLAMA_SKIP_OLLAMA_START === '1') {
+    console.log('[WolfeLlama] Ollama auto-start disabled by WOLFELLAMA_SKIP_OLLAMA_START=1');
+    return;
+  }
+
+  const alreadyRunning = await isPortOpen(OLLAMA_HOST, OLLAMA_PORT);
+  if (alreadyRunning) {
+    console.log(`[WolfeLlama] Ollama already available at http://${OLLAMA_HOST}:${OLLAMA_PORT}`);
+    return;
+  }
+
+  try {
+    ollamaProcess = spawn('ollama', ['serve'], {
+      detached: false,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: {
+        ...process.env,
+        OLLAMA_HOST: `${OLLAMA_HOST}:${OLLAMA_PORT}`
+      }
+    });
+
+    ollamaProcess.stdout.on('data', (data) => console.log(`[Ollama] ${String(data).trim()}`));
+    ollamaProcess.stderr.on('data', (data) => console.log(`[Ollama] ${String(data).trim()}`));
+    ollamaProcess.once('exit', (code, signal) => {
+      console.log(`[WolfeLlama] Ollama process exited code=${code ?? 'none'} signal=${signal ?? 'none'}`);
+      ollamaProcess = null;
+    });
+
+    for (let attempt = 0; attempt < 30; attempt += 1) {
+      if (await isPortOpen(OLLAMA_HOST, OLLAMA_PORT, 400)) {
+        console.log(`[WolfeLlama] Ollama started at http://${OLLAMA_HOST}:${OLLAMA_PORT}`);
+        return;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+
+    console.log('[WolfeLlama] Ollama start requested, but port 11434 did not open yet. The chat UI can retry with Check Local Model.');
+  } catch (error) {
+    console.log(`[WolfeLlama] Could not auto-start Ollama: ${error && error.message ? error.message : String(error)}`);
+  }
 }
 
 function createMainWindow() {
@@ -76,7 +144,12 @@ if (!gotLock) {
     }
   });
 
-  app.whenReady().then(createMainWindow).catch(showStartupFailure);
+  app.whenReady()
+    .then(async () => {
+      await startOllamaIfNeeded();
+      createMainWindow();
+    })
+    .catch(showStartupFailure);
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -84,6 +157,12 @@ if (!gotLock) {
     }
   });
 }
+
+app.on('before-quit', () => {
+  if (ollamaProcess && !ollamaProcess.killed) {
+    ollamaProcess.kill('SIGTERM');
+  }
+});
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
