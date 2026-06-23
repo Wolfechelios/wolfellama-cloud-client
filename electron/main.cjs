@@ -6,8 +6,11 @@ const { spawn } = require('child_process');
 
 const isDev = Boolean(process.env.ELECTRON_DEV_SERVER_URL);
 const OLLAMA_HOST = '127.0.0.1';
-const OLLAMA_PORT = 11434;
+const OLLAMA_PORT = Number(process.env.OLLAMA_PORT || 11434);
+const OPEN_WEBUI_HOST = '127.0.0.1';
+const OPEN_WEBUI_PORT = Number(process.env.OPEN_WEBUI_PORT || 8080);
 let ollamaProcess = null;
+let openWebUIProcess = null;
 
 function getRendererEntry() {
   if (isDev) {
@@ -45,6 +48,23 @@ function isPortOpen(host, port, timeoutMs = 600) {
   });
 }
 
+async function waitForPort(host, port, attempts = 30, timeoutMs = 400, delayMs = 250) {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    if (await isPortOpen(host, port, timeoutMs)) return true;
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+  }
+  return false;
+}
+
+function attachProcessLogs(label, processRef, onExit) {
+  processRef.stdout?.on('data', (data) => console.log(`[${label}] ${String(data).trim()}`));
+  processRef.stderr?.on('data', (data) => console.log(`[${label}] ${String(data).trim()}`));
+  processRef.once('exit', (code, signal) => {
+    console.log(`[WolfeLlama] ${label} process exited code=${code ?? 'none'} signal=${signal ?? 'none'}`);
+    onExit();
+  });
+}
+
 async function startOllamaIfNeeded() {
   if (process.env.WOLFELLAMA_SKIP_OLLAMA_START === '1') {
     console.log('[WolfeLlama] Ollama auto-start disabled by WOLFELLAMA_SKIP_OLLAMA_START=1');
@@ -67,24 +87,60 @@ async function startOllamaIfNeeded() {
       }
     });
 
-    ollamaProcess.stdout.on('data', (data) => console.log(`[Ollama] ${String(data).trim()}`));
-    ollamaProcess.stderr.on('data', (data) => console.log(`[Ollama] ${String(data).trim()}`));
-    ollamaProcess.once('exit', (code, signal) => {
-      console.log(`[WolfeLlama] Ollama process exited code=${code ?? 'none'} signal=${signal ?? 'none'}`);
+    attachProcessLogs('Ollama', ollamaProcess, () => {
       ollamaProcess = null;
     });
 
-    for (let attempt = 0; attempt < 30; attempt += 1) {
-      if (await isPortOpen(OLLAMA_HOST, OLLAMA_PORT, 400)) {
-        console.log(`[WolfeLlama] Ollama started at http://${OLLAMA_HOST}:${OLLAMA_PORT}`);
-        return;
-      }
-      await new Promise((resolve) => setTimeout(resolve, 250));
+    if (await waitForPort(OLLAMA_HOST, OLLAMA_PORT)) {
+      console.log(`[WolfeLlama] Ollama started at http://${OLLAMA_HOST}:${OLLAMA_PORT}`);
+      return;
     }
 
-    console.log('[WolfeLlama] Ollama start requested, but port 11434 did not open yet. The chat UI can retry with Check Local Model.');
+    console.log(`[WolfeLlama] Ollama start requested, but port ${OLLAMA_PORT} did not open yet. The chat UI can retry with Check Local Model.`);
   } catch (error) {
     console.log(`[WolfeLlama] Could not auto-start Ollama: ${error && error.message ? error.message : String(error)}`);
+  }
+}
+
+async function startOpenWebUIIfNeeded() {
+  if (process.env.WOLFELLAMA_SKIP_OPEN_WEBUI_START === '1') {
+    console.log('[WolfeLlama] OpenWebUI auto-start disabled by WOLFELLAMA_SKIP_OPEN_WEBUI_START=1');
+    return;
+  }
+
+  const alreadyRunning = await isPortOpen(OPEN_WEBUI_HOST, OPEN_WEBUI_PORT);
+  if (alreadyRunning) {
+    console.log(`[WolfeLlama] OpenWebUI already available at http://${OPEN_WEBUI_HOST}:${OPEN_WEBUI_PORT}`);
+    return;
+  }
+
+  const openWebUIDataDir = path.join(app.getPath('userData'), 'open-webui-data');
+  fs.mkdirSync(openWebUIDataDir, { recursive: true });
+
+  try {
+    openWebUIProcess = spawn('open-webui', ['serve', '--host', OPEN_WEBUI_HOST, '--port', String(OPEN_WEBUI_PORT)], {
+      detached: false,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: {
+        ...process.env,
+        DATA_DIR: openWebUIDataDir,
+        OLLAMA_BASE_URL: `http://${OLLAMA_HOST}:${OLLAMA_PORT}`,
+        WEBUI_AUTH: process.env.WEBUI_AUTH || 'False'
+      }
+    });
+
+    attachProcessLogs('OpenWebUI', openWebUIProcess, () => {
+      openWebUIProcess = null;
+    });
+
+    if (await waitForPort(OPEN_WEBUI_HOST, OPEN_WEBUI_PORT, 60, 500, 500)) {
+      console.log(`[WolfeLlama] OpenWebUI started at http://${OPEN_WEBUI_HOST}:${OPEN_WEBUI_PORT}`);
+      return;
+    }
+
+    console.log(`[WolfeLlama] OpenWebUI start requested, but port ${OPEN_WEBUI_PORT} did not open yet.`);
+  } catch (error) {
+    console.log(`[WolfeLlama] Could not auto-start OpenWebUI. Install it with: pipx install open-webui or pip install open-webui. Error: ${error && error.message ? error.message : String(error)}`);
   }
 }
 
@@ -147,6 +203,7 @@ if (!gotLock) {
   app.whenReady()
     .then(async () => {
       await startOllamaIfNeeded();
+      await startOpenWebUIIfNeeded();
       createMainWindow();
     })
     .catch(showStartupFailure);
@@ -159,6 +216,10 @@ if (!gotLock) {
 }
 
 app.on('before-quit', () => {
+  if (openWebUIProcess && !openWebUIProcess.killed) {
+    openWebUIProcess.kill('SIGTERM');
+  }
+
   if (ollamaProcess && !ollamaProcess.killed) {
     ollamaProcess.kill('SIGTERM');
   }
